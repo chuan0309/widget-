@@ -1,0 +1,19 @@
+:root { --bg:#f5f5f7; --ink:#1d1d1f; --soft:#6e6e73; --card:#fff; --accent:#0071e3; --line:rgba(0,0,0,.08); }
+@media (prefers-color-scheme: dark) { :root { --bg:#000; --ink:#f5f5f7; --soft:#a1a1a6; --card:#1c1c1e; --accent:#2997ff; --line:rgba(255,255,255,.12); } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
+header { text-align:center; padding: 64px 0 32px; }
+header img { width: 96px; height: 96px; border-radius: 22px; }
+h1 { font-size: clamp(36px, 6vw, 56px); margin: 16px 0 8px; letter-spacing: -.02em; }
+.lead { font-size: 21px; color: var(--soft); max-width: 640px; margin: 0 auto 24px; }
+.btn { display:inline-block; background:var(--accent); color:#fff; padding:12px 24px; border-radius:980px; text-decoration:none; font-weight:600; }
+.shot { width:100%; border-radius:18px; box-shadow:0 20px 60px rgba(0,0,0,.25); margin: 24px 0 48px; display:block; }
+.grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap:16px; }
+.card { background:var(--card); border-radius:18px; padding:22px; border:1px solid var(--line); }
+.card h3 { margin:0 0 6px; font-size:19px; }
+.card p { margin:0; color:var(--soft); font-size:15px; }
+h2 { font-size: 32px; margin: 56px 0 16px; letter-spacing:-.01em; }
+section p, section li { color: var(--ink); }
+footer { text-align:center; color:var(--soft); font-size:14px; padding: 32px 20px; border-top:1px solid var(--line); }
+footer a, main a:not(.btn) { color: var(--accent); }

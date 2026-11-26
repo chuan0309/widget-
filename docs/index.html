@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glass Widgets — desktop widgets for Windows 11</title>
+<meta name="description" content="Glass Widgets is a free Windows 11 desktop app that shows glass-style widgets: clock, weather, Bluetooth battery levels, audio output, Google Calendar and your Pinterest boards.">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="icon.png" alt="Glass Widgets icon">
+    <h1>Glass Widgets</h1>
+    <p class="lead">Rounded, frosted-glass widgets for the Windows 11 desktop. A free, open-source desktop app — not a social network, no account with us, no ads.</p>
+    <a class="btn" href="https://github.com/chuan0309/widget-/releases/latest">Download for Windows</a>
+  </header>
+
+  <img class="shot" src="screenshot.jpg" alt="Glass Widgets on a Windows desktop: calendar, weather, clock, battery, audio output and Pinterest widgets">
+
+  <div class="grid">
+    <div class="card"><h3>Pinterest boards</h3><p>Sign in with Pinterest and pick one of your own boards. Its Pins slowly scroll in a widget; click a Pin to open it on Pinterest. Read-only.</p></div>
+    <div class="card"><h3>Bluetooth battery</h3><p>Battery rings for earbuds, mice, keyboards and controllers, plus a small pop-up when a device connects or runs low.</p></div>
+    <div class="card"><h3>Google Calendar</h3><p>Today's date and your upcoming events, read-only.</p></div>
+    <div class="card"><h3>Weather &amp; clock</h3><p>Local forecast from Open-Meteo and an analog clock.</p></div>
+    <div class="card"><h3>Audio output</h3><p>See where sound is playing and switch speakers or headphones with one click.</p></div>
+    <div class="card"><h3>Three sizes, snap to grid</h3><p>Small, medium and large widgets that snap into place and stay on the desktop layer, behind your windows.</p></div>
+  </div>
+
+  <section>
+    <h2>How Glass Widgets uses Pinterest</h2>
+    <p>Glass Widgets lets a person show Pins from <strong>their own</strong> Pinterest boards on <strong>their own</strong> Windows desktop.</p>
+    <ol>
+      <li>The user clicks “Sign in with Pinterest” in the app and approves access on pinterest.com (scopes: <code>boards:read</code>, <code>pins:read</code>, and optionally the secret-board equivalents).</li>
+      <li>The app lists the user's boards; the user chooses one.</li>
+      <li>The app downloads that board's Pin images and shows them in a desktop widget. Clicking a Pin opens it on pinterest.com.</li>
+    </ol>
+    <p>The app never creates, edits or deletes anything on Pinterest, never shows one user's Pins to anyone else, and has no server: the access token is stored encrypted on the user's computer and is only sent to Pinterest's API. The user can sign out in the app or revoke access in their Pinterest settings at any time.</p>
+  </section>
+
+  <section>
+    <h2>Privacy</h2>
+    <p>No analytics, no ads, no tracking, and no data sent to the developer. Read the full <a href="privacy.html">privacy policy</a>.</p>
+  </section>
+</main>
+<footer>
+  Glass Widgets is an independent open-source project and is not affiliated with Pinterest, Google, Apple or Microsoft.<br>
+  <a href="privacy.html">Privacy policy</a> · <a href="https://github.com/chuan0309/widget-">Source code &amp; support</a>
+</footer>
+</body>
+</html>
