@@ -406,6 +406,14 @@ async function loadWeather(force = false) {
   const { city } = await api.getState();
   store.city = city;
   try {
+    // 選了中央氣象署就先用氣象署；抓不到（沒網路、授權碼錯、不在臺灣）就改用 Open-Meteo
+    const cwa = await api.weatherCwa?.().catch(() => null);
+    if (cwa && !cwa.error) {
+      store.weather = cwa;
+      store.weatherError = false;
+      refresh("weather");
+      return;
+    }
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
       "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day" +
       "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=6";
@@ -432,11 +440,12 @@ WIDGETS.weather = {
     const cur = data.current;
     let [desc, iconName, color] = weatherLook(cur.weather_code);
     if (cur.is_day === 0 && cur.weather_code <= 2) { iconName = "clear_night"; color = "#fff"; if (cur.weather_code === 0) desc = "晴朗"; }
+    if (cur.desc) desc = esc(cur.desc); // 氣象署的說法（例如「多雲時晴」）
     pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
     const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
-        <div class="wt-top"><div class="wt-city">${esc(city.name)}</div><span class="wt-icon" style="color:${color}">${icon(iconName)}</span></div>
+        <div class="wt-top"><div class="wt-city">${esc(data.place || city.name)}</div><span class="wt-icon" style="color:${color}">${icon(iconName)}</span></div>
         <div class="wt-temp">${Math.round(cur.temperature_2m)}°</div>
         <div class="wt-desc"><span>${desc}</span><small>${range}</small></div></div>`);
       return;
@@ -466,7 +475,7 @@ WIDGETS.weather = {
     }
     setHTML(pane, `<div class="wt">
       <div class="wt-top">
-        <div><div class="wt-city">${esc(city.name)}</div><div class="wt-temp">${Math.round(cur.temperature_2m)}°</div></div>
+        <div><div class="wt-city">${esc(data.place || city.name)}</div><div class="wt-temp">${Math.round(cur.temperature_2m)}°</div></div>
         <div class="wt-desc right"><span class="wt-icon" style="color:${color}">${icon(iconName)}</span><span>${desc}</span><small>${range}</small></div>
       </div>
       <div class="wt-hours">${hours}</div>${days}</div>`);

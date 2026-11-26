@@ -596,6 +596,7 @@ function render() {
   renderCity();
   renderGeneral();
   renderCalendars();
+  renderWeatherSource();
 }
 // 從小組件右鍵改了大小、或日曆更新時，重新讀一次
 window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
@@ -605,3 +606,38 @@ window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); rende
   render();
   go(params.get("section") || "widgets");
 })();
+
+/* ───────── 天氣資料來源：Open-Meteo／中央氣象署 ───────── */
+function renderWeatherSource() {
+  const src = state.weatherSource || "openmeteo";
+  document.querySelectorAll('input[name="wsrc"]').forEach((r) => (r.checked = r.value === src));
+  $("cwaBox").hidden = src !== "cwa";
+  $("wsrcHint").textContent = src === "cwa"
+    ? "天氣資料來自中央氣象署開放資料平臺（鄉鎮天氣預報）。"
+    : "天氣資料來自 Open-Meteo（免費、不用註冊）。";
+  if (src === "cwa" && !$("cwaMsg").dataset.set) {
+    $("cwaMsg").textContent = state.cwaHasKey ? "已經設定好授權碼了（想換的話再貼一次）" : "到氣象資料開放平臺註冊後，在「會員資訊 → 取得授權碼」複製過來";
+  }
+}
+document.querySelectorAll('input[name="wsrc"]').forEach((r) => r.addEventListener("change", () => {
+  state.weatherSource = r.value;
+  renderWeatherSource();
+  save({ weatherSource: r.value }, r.value === "cwa" ? (state.cwaHasKey ? "改用中央氣象署" : "請貼上授權碼") : "改用 Open-Meteo");
+}));
+$("cwaSite").addEventListener("click", () => window.api.mgrOpenUrl("https://opendata.cwa.gov.tw/user/authkey"));
+$("cwaForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const key = $("cwaKey").value.trim();
+  if (!key && !state.cwaHasKey) return;
+  $("cwaMsg").dataset.set = "1";
+  $("cwaMsg").textContent = "測試中…";
+  const r = await window.api.weatherCwaTest(key);
+  $("cwaKey").value = "";
+  if (r.ok) {
+    state.cwaHasKey = true;
+    $("cwaMsg").textContent = `可以用了：${r.place} ${Math.round(r.temp)}°，${r.desc}`;
+    save({ weatherSource: "cwa" });
+  } else {
+    $("cwaMsg").textContent = `沒成功：${r.error}`;
+  }
+});
