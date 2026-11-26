@@ -322,19 +322,49 @@ function mergeSameDevice(list) {
 
 const lowAlerted = new Set();
 
+// 低功耗藍牙（手機、很多鍵盤滑鼠）閒置時會短暫斷線再自己連回來。
+// 為了不要一直跳通知：
+//   1. 斷線要持續 45 秒以上才算真的斷線（中間連回來就當作一直連著）
+//   2. 同一台裝置的「已連線」通知，3 分鐘內最多一次
+const DISCONNECT_GRACE = 45 * 1000;
+const NOTIFY_COOLDOWN = 3 * 60 * 1000;
+const lastSeen = new Map();     // 裝置 id → 最後一次看到「連著」的時間
+const lastBattery = new Map();  // 裝置 id → 最後讀到的電量（短暫斷線時沿用）
+const lastNotified = new Map(); // 裝置 id → 上次跳「已連線」通知的時間
+let rawDevices = [];
+let lastBroadcast = "";
+
 function handleDevices(raw) {
-  const next = mergeSameDevice(raw);
+  rawDevices = mergeSameDevice(raw);
+  evaluateDevices();
+}
+
+function evaluateDevices() {
+  const now = Date.now();
+  for (const d of rawDevices) {
+    if (d.connected) lastSeen.set(d.id, now);
+    if (d.battery != null) lastBattery.set(d.id, d.battery);
+  }
+  const next = rawDevices.map((d) => {
+    const connected = d.connected || now - (lastSeen.get(d.id) ?? -Infinity) < DISCONNECT_GRACE;
+    return { ...d, connected, battery: d.battery ?? (connected ? lastBattery.get(d.id) ?? null : null) };
+  });
+
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;
-  broadcast("devices", devices);
+  const json = JSON.stringify(devices);
+  if (json !== lastBroadcast) { lastBroadcast = json; broadcast("devices", devices); }
 
   const first = firstSnapshot;
   firstSnapshot = false;
   const bt = settings.bluetooth;
   for (const d of next) {
     const muted = !!bt.muted[d.id]; // 在管理程式裡關掉這台的通知
-    // 新連上的裝置 → 跳通知（開程式前就連著的不跳）
-    if (!first && bt.notifyConnect && !muted && d.connected && !wasConnected.has(d.id)) showPopup(d);
+    // 真的新連上的裝置 → 跳通知（開程式前就連著的不跳）
+    if (!first && d.connected && !wasConnected.has(d.id)) {
+      const recently = now - (lastNotified.get(d.id) ?? -Infinity) < NOTIFY_COOLDOWN;
+      if (bt.notifyConnect && !muted && !recently) { lastNotified.set(d.id, now); showPopup(d); }
+    }
 
     // 電量低 → 跳一次提醒，充回門檻 +5% 以上才會再提醒
     if (d.connected && d.battery != null && d.battery <= bt.lowThreshold && !lowAlerted.has(d.id)) {
@@ -351,6 +381,8 @@ function handleDevices(raw) {
     }
   }
 }
+// 斷線 45 秒後要把狀態改成「未連線」，所以定時再檢查一次
+setInterval(() => rawDevices.length && evaluateDevices(), 15 * 1000);
 
 function broadcast(channel, data) {
   for (const w of [...Object.values(widgetWins), managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);

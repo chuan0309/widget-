@@ -18,7 +18,7 @@ $KEY_COD       = '{2BD67D8B-8BEB-48D5-87E0-6CDA3428040A} 10'   # Bluetooth Class
 
 $POLL_SECONDS = 3
 $USB_HEADSETS = @('INZONE')   # name keywords of headsets that use their own USB receiver
-$GATT_EVERY_SECONDS = 60
+$GATT_EVERY_SECONDS = 120
 
 function Get-Mac([string]$id) {
   if ($id -match 'DEV_([0-9A-F]{12})(\\|$)') { return $Matches[1].ToUpper() }        # BTHENUM\DEV_x / BTHLE\DEV_x
@@ -58,10 +58,11 @@ function Read-GattBattery([string]$mac) {
     $addr = [Convert]::ToUInt64($mac, 16)
     $dev = Await ([Windows.Devices.Bluetooth.BluetoothLEDevice]::FromBluetoothAddressAsync($addr)) ([Windows.Devices.Bluetooth.BluetoothLEDevice])
     if (-not $dev) { return $null }
-    $svcs = Await ($dev.GetGattServicesForUuidAsync($BATTERY_SERVICE, [Windows.Devices.Bluetooth.BluetoothCacheMode]::Uncached)) ([Windows.Devices.Bluetooth.GenericAttributeProfile.GattDeviceServicesResult])
+    # Cached: don't make the device re-discover its services (that can drop/redo the connection)
+    $svcs = Await ($dev.GetGattServicesForUuidAsync($BATTERY_SERVICE, [Windows.Devices.Bluetooth.BluetoothCacheMode]::Cached)) ([Windows.Devices.Bluetooth.GenericAttributeProfile.GattDeviceServicesResult])
     if (-not $svcs -or $svcs.Services.Count -eq 0) { return $null }
     $svc = $svcs.Services[0]
-    $chars = Await ($svc.GetCharacteristicsForUuidAsync($BATTERY_LEVEL, [Windows.Devices.Bluetooth.BluetoothCacheMode]::Uncached)) ([Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristicsResult])
+    $chars = Await ($svc.GetCharacteristicsForUuidAsync($BATTERY_LEVEL, [Windows.Devices.Bluetooth.BluetoothCacheMode]::Cached)) ([Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristicsResult])
     $level = $null
     if ($chars -and $chars.Characteristics.Count -gt 0) {
       $read = Await ($chars.Characteristics[0].ReadValueAsync([Windows.Devices.Bluetooth.BluetoothCacheMode]::Uncached)) ([Windows.Devices.Bluetooth.GenericAttributeProfile.GattReadResult])
@@ -123,9 +124,9 @@ while ($true) {
       }
       if ($c.level -ne $null) { $d.battery = $c.level }
     }
-    # Forget cached readings of devices that went away
+    # Forget cached readings of devices that were removed (keep them across short drops)
     foreach ($k in @($gattCache.Keys)) {
-      if (-not $devices.ContainsKey($k) -or -not $devices[$k].connected) { $gattCache.Remove($k) }
+      if (-not $devices.ContainsKey($k)) { $gattCache.Remove($k) }
     }
   }
 
