@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com; img-src 'self' data: https://i.pinimg.com" />
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com https://air-quality-api.open-meteo.com; img-src 'self' data: https://i.pinimg.com" />
   <title>Glass Widgets</title>
   <link rel="stylesheet" href="glass.css" />
   <link rel="stylesheet" href="widget.css" />
@@ -11,6 +11,7 @@
 <!-- 整個主螢幕只有這一個透明視窗，所有小組件都畫在這裡 -->
 <body class="glass-ios">
   <script src="icons.js"></script>
+  <script src="wxicons.js"></script>
   <script src="devices.js"></script>
   <script src="host.js"></script>
 </body>

@@ -44,6 +44,7 @@ window.api.onGoto((section) => go(section));
 const WIDGET_INFO = [
   { kind: "clock", name: "時鐘", icon: "schedule" },
   { kind: "weather", name: "天氣", icon: "partly_cloudy" },
+  { kind: "aqi", name: "空氣品質", icon: "foggy" },
   { kind: "battery", name: "電量", icon: "buds" },
   { kind: "audio", name: "音訊輸出", icon: "speaker" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
@@ -597,6 +598,7 @@ function render() {
   renderGeneral();
   renderCalendars();
   renderWeatherSource();
+  renderPinInterval();
 }
 // 從小組件右鍵改了大小、或日曆更新時，重新讀一次
 window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
@@ -641,3 +643,7 @@ $("cwaForm").addEventListener("submit", async (e) => {
     $("cwaMsg").textContent = `沒成功：${r.error}`;
   }
 });
+
+/* ───────── Pinterest 換圖間隔（10～120 分鐘） ───────── */
+function renderPinInterval() { $("pnInterval").value = String(state.settings.pinInterval || 30); }
+$("pnInterval").addEventListener("change", (e) => save({ pinInterval: Number(e.target.value) }, "已套用"));

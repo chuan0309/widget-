@@ -62,26 +62,26 @@
 .wt-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .wt-city { font-size: 14px; font-weight: 600; }
 .wt-temp { margin-top: 2px; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 48px; font-weight: 300; line-height: 1.05; letter-spacing: -0.03em; }
-.wt-icon svg { width: 34px; height: 34px; fill: currentColor; }
+.wt-icon svg { width: 36px; height: 36px; }
 .wt-desc { font-size: 13px; font-weight: 600; line-height: 1.35; display: flex; flex-direction: column; text-align: right; }
 .wt-desc small { font-weight: 500; font-size: 12px; color: var(--ink-soft); }
 .size-s .wt-desc { margin-top: auto; text-align: left; }
 .wt-hours { margin-top: auto; display: flex; justify-content: space-between; padding-top: 8px; border-top: 0.5px solid rgb(var(--fg) / 0.25); }
 .wt-hour { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; }
 .wt-hour small { font-size: 11px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
-.wt-hour svg { width: 22px; height: 22px; fill: currentColor; }
+.wt-hour svg { width: 26px; height: 26px; }
 .size-m .wt-temp { font-size: 40px; }
 .size-l .wt-hours { margin-top: 12px; padding-bottom: 10px; border-bottom: 0.5px solid rgb(var(--fg) / 0.25); }
 .wt-days { margin-top: 2px; display: flex; flex-direction: column; }
 /* 像 iPhone 天氣：每天一行、中間細線、最低溫淡色、溫度條在深色軌道上 */
 .wt-day {
-  display: grid; grid-template-columns: 40px 30px 32px 1fr 32px; align-items: center; gap: 8px;
-  height: 31px; font-size: 14px; font-weight: 600;
+  display: grid; grid-template-columns: 36px 50px 30px 1fr 30px; align-items: center; gap: 6px;
+  height: 30px; font-size: 14px; font-weight: 600;
 }
 .wt-day + .wt-day { border-top: 0.5px solid rgb(var(--fg) / 0.18); }
-.wt-dicon { display: flex; flex-direction: column; align-items: center; line-height: 1; }
-.wt-day svg { width: 20px; height: 20px; fill: currentColor; }
-.wt-rain { font-size: 10px; font-weight: 700; color: #64d2ff; margin-top: -1px; }
+.wt-dicon { display: flex; align-items: center; gap: 1px; line-height: 1; }
+.wt-day svg { width: 24px; height: 24px; flex-shrink: 0; }
+.wt-rain { font-size: 11px; font-weight: 700; color: #64d2ff; }
 .wt-day .lo { color: rgb(var(--fg) / 0.5); text-align: right; }
 .wt-day .hi { text-align: right; }
 .wt-bar { height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.22); position: relative; }
@@ -90,6 +90,31 @@
   background: #fff; box-shadow: 0 0 0 1.5px rgba(30, 40, 70, 0.8);
 }
 .wt-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+
+/* ───────── 空氣品質 ───────── */
+.aq { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; }
+.aq-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.aq-dots { width: 15px; height: 15px; fill: currentColor; }
+.aq-num { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 46px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; margin-top: auto; }
+.aq-name { font-size: 15px; font-weight: 700; }
+.aq-row { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.aq-row .aq-num { margin-top: 0; font-size: 40px; }
+.aq-desc { font-size: 13px; font-weight: 600; margin-top: 6px; }
+/* 色條：0～500，綠→黃→橘→紅→紫→暗紅 */
+.aq-bar {
+  position: relative; height: 5px; border-radius: 3px; margin-top: 10px;
+  background: linear-gradient(90deg, #34c759 0%, #ffcc00 20%, #ff9500 30%, #ff3b30 40%, #af52de 60%, #8e1b3a 100%);
+}
+.aq-bar b { position: absolute; top: 50%; width: 9px; height: 9px; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(20, 22, 28, 0.75); }
+.size-m .aq-bar { margin-top: auto; margin-bottom: 4px; }
+.aq-health { font-size: 13px; line-height: 1.45; margin-top: 14px; padding: 10px 12px; border-radius: 12px; background: rgb(var(--fg) / 0.08); }
+.aq-sub { font-size: 12px; color: var(--ink-soft); margin-top: 10px; font-weight: 600; }
+.aq-pols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: auto; }
+.aq-pol { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: rgb(var(--fg) / 0.06); }
+.aq-pol span { font-size: 11px; color: var(--ink-soft); font-weight: 600; }
+.aq-pol b { font-size: 17px; font-weight: 600; }
+.aq-pol small { font-size: 9.5px; color: var(--ink-soft); }
+.aq-pol.main { box-shadow: inset 0 0 0 1.5px rgb(var(--fg) / 0.35); }
 
 /* ───────── 電量 ───────── */
 .batt { height: 100%; display: flex; align-items: center; justify-content: space-around; padding: 0 8px; }
@@ -219,16 +244,18 @@
 body.paused *, body.paused *::before, body.paused *::after { animation-play-state: paused !important; }
 
 /* ───────── Pinterest ───────── */
-/* 像 iPhone 的照片小組件：滿版大圖，隨機輪播、淡入淡出，左上角小小的 P */
-.pane.pinterest { cursor: pointer; background: rgba(0, 0, 0, 0.15); }
+/* 照片牆：小 1 張、中 3 張（橫排）、大 6 張（3×2），格子之間細細的縫 */
+.pane.pinterest { cursor: pointer; background: rgba(0, 0, 0, 0.25); }
+.pn-grid { position: absolute; inset: 0; display: grid; gap: 2px; }
+.pn-grid.n3 { grid-template-columns: repeat(3, 1fr); }
+.pn-grid.n6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+.pn-cell { position: relative; overflow: hidden; background: rgb(var(--fg) / 0.06); }
 .pn-photo {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; opacity: 0; transition: opacity 1.2s ease;
+  object-fit: cover; opacity: 0; transition: opacity 1.6s ease;
   -webkit-user-drag: none;
 }
 .pn-photo.on { opacity: 1; }
-.pn-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 30%); }
-.pn-head { position: absolute; top: 12px; left: 12px; z-index: 2; }
 /* Pinterest 的紅色 P 徽章 */
 .pn-badge {
   width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;

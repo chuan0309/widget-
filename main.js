@@ -51,8 +51,8 @@ log("start", { version: app.getVersion(), os: os.release(), electron: process.ve
 const DEFAULTS = {
   glass: "ios", // 大圓角＋模糊桌布（像 iPhone）
   tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
-  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true },
-  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
+  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true, aqi: false },
+  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l", aqi: "s" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   weatherAuto: true, // 天氣自動定位
@@ -64,6 +64,7 @@ const DEFAULTS = {
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
+  pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
@@ -82,7 +83,7 @@ function loadSettings() {
       audio: { ...DEFAULTS.audio, ...saved.audio },
       // 拿掉已經不存在的小組件（例如舊版的手機連結）
       stacks: (Array.isArray(saved.stacks) ? saved.stacks : [])
-        .map((st) => ({ ...st, items: (st.items || []).filter((k) => ["battery", "clock", "weather", "audio", "calendar", "pinterest"].includes(k)) }))
+        .map((st) => ({ ...st, items: (st.items || []).filter((k) => ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest"].includes(k)) }))
         .filter((st) => st.items.length > 0),
       pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
       bluetooth: { ...DEFAULTS.bluetooth, ...saved.bluetooth, muted: { ...saved.bluetooth?.muted } },
@@ -100,14 +101,14 @@ function saveSettings() {
 /* ───────── 小組件：全部放在「一個」透明視窗裡 ───────── */
 // 以前一個小組件一個視窗（每個都是一份瀏覽器，很吃記憶體）。現在整個主螢幕只有一個
 // 透明、點得穿的視窗，所有小組件都畫在裡面：記憶體少很多，拖動也只是畫面裡的移動，很順。
-const KINDS = ["battery", "clock", "weather", "audio", "calendar", "pinterest"]; // 也是預設排列的順序
+const KINDS = ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest"]; // 也是預設排列的順序
 const SIZES = {
   s: { width: 170, height: 170, cols: 1, rows: 1 },
   m: { width: 356, height: 170, cols: 2, rows: 1 },
   l: { width: 356, height: 356, cols: 2, rows: 2 },
 };
 const CELL = 186; // 170 + 16 間距
-const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest" };
+const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest", aqi: "空氣品質" };
 
 // 小組件的 key：一般小組件就是種類名稱（"clock"），疊放是 "stack:<id>"
 const stackOf = (key) => String(key).startsWith("stack:") ? (settings.stacks || []).find((st) => `stack:${st.id}` === key) : null;
@@ -188,7 +189,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval });
   sendLayout();
 }
 
@@ -671,6 +672,10 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (Number.isFinite(patch.pinInterval)) {
+    settings.pinInterval = Math.min(120, Math.max(10, Math.round(patch.pinInterval)));
+    sendHostInit();
+  }
   if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
   if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
   if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");
