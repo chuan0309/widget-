@@ -35,7 +35,6 @@ Questions about this policy can be sent through this project's GitHub page: http
 Glass Widgets 是一個在 Windows 桌面顯示小組件的個人程式，沒有伺服器。
 
 - **Pinterest 資料**：登入後只會讀取使用者自己的圖版和 Pin，用來在使用者自己的電腦桌面上顯示圖片，不會新增、修改或刪除任何東西。
-- **Pinterest 首頁推薦（選用）**：使用者在程式裡登入 pinterest.com 後，登入資料只存在程式自己的瀏覽資料夾；程式大約每小時在看不到的視窗打開使用者的 Pinterest 首頁，把圖顯示在小組件上，不會傳到其他地方。
 - **登入資料**：只存在使用者的電腦上，並用 Windows 內建加密保護，只會傳給 Pinterest 官方 API。
 - **藍牙裝置名稱和電量**：只在使用者電腦上讀取，不會傳出去。
 - **天氣**：只會把城市座標傳給 Open-Meteo 取得天氣；如果選了中央氣象署，會把使用者自己的授權碼（加密存在電腦上）和縣市名稱傳給氣象署取得鄉鎮預報。

@@ -1,6 +1,7 @@
 // 判斷裝置類型：先看名稱（比較準），認不出來再看藍牙「裝置類別碼」（Class of Device）
 const DEVICE_RULES = [
   ["headphones", /airpods max|inzone h\d|inzone(?! buds)|wh-\d|wh-1000|headphone|headset|耳罩|頭戴|qc ?\d+|quietcomfort|arctis|cloud (ii|alpha|flight)|blackshark|kraken/i],
+  ["budscase", /充電盒|charging case|airpods.*\bcase\b/i],
   ["buds", /buds|airpods|pods|earbud|wf-\d|wf-1000|linkbuds|freebuds|liberty|tws|ear ?\(|nothing ear|耳機/i],
   ["gamepad", /controller|gamepad|xbox|dualsense|dualshock|joy-?con|8bitdo|手把/i],
   ["mouse", /mouse|mx (master|anywhere|ergo|vertical)|trackball|deathadder|viper|basilisk|pebble|g\s?pro|lift|滑鼠/i],

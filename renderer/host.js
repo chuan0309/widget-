@@ -30,6 +30,8 @@ const setBackground = (b) => {
 };
 setBackground("glass");
 api.onBackground?.(setBackground);
+const setFont = (w) => document.body.style.setProperty("--fw", String(w));
+api.onFont?.(setFont);
 
 /* ───────── 日期小工具 ───────── */
 const WEEK = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -106,7 +108,7 @@ api.onHostInit?.((d) => {
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
-  document.body.classList.toggle("font-light", d.fontWeight === "light");
+  if (d.fontWeight != null) setFont(d.fontWeight);
   if (d.pinInterval) store.pinInterval = d.pinInterval;
   if (Array.isArray(d.worldClocks)) { store.worldClocks = d.worldClocks; refresh("clock"); }
   for (const inst of instances.values()) layoutBackdrop(inst);
@@ -629,12 +631,12 @@ function chargingGuess(id, level) {
 }
 function batteryList() {
   const list = [];
-  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging, sub: "" });
+  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging });
   for (const d of store.devices.filter((d) => d.connected)) {
     // iPhone 捷徑有傳充電狀態就用那個（即時），不然用「電量有沒有變多」來猜
     const guess = chargingGuess(d.id, d.battery);
     const charging = typeof d.charging === "boolean" ? d.charging : guess;
-    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : "" }); // 充電中只看閃電，跟 iPhone 一樣不另外寫字
+    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging });
   }
   // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面
   const order = store.batteryPrefs.order || [];
@@ -648,7 +650,7 @@ const ringHTML = (it) => {
 };
 
 // 一頁放幾台：中 4 台；大的照實際放得下的數量（最多 6 台）
-const battPer = (inst) => inst.size === "l" ? (inst.battFit || 6) : 4;
+const battPer = (inst) => inst.size === "l" ? 6 : 4;
 
 WIDGETS.battery = {
   mount(pane, inst) {
@@ -667,25 +669,22 @@ WIDGETS.battery = {
       setHTML(pane, `<div class="setup-msg"><span class="ring unknown" style="--p:0;--size:46px">${icon("other")}</span><small>沒有連線中的藍牙裝置</small></div>`);
       return;
     }
-    if (inst.battLen !== list.length) { inst.battLen = list.length; inst.battFit = 0; }
     const per = battPer(inst);
     const pages = Math.ceil(list.length / per);
     if (inst.battPage >= pages) inst.battPage = 0;
     const show = list.slice(inst.battPage * per, (inst.battPage + 1) * per);
+    // 大：跟 iPhone／Mac 的「電池」大組件一樣——圖示、名稱（一行，太長用…）、百分比、橫的電池圖；
+    // 固定 6 列，沒裝置的列也留著分隔線
+    const glyph = (it) => it.battery == null ? "" : `<span class="bglyph ${it.charging ? "charging" : it.battery <= 20 ? "low" : ""}"><i style="width:${Math.max(6, it.battery)}%"></i>${it.charging ? `<svg viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : ""}</span>`;
     const body = inst.size === "l"
-      ? show.map((it) => `<div class="batt-row">${ringHTML(it)}
-          <div><b>${esc(it.name)}</b>${it.sub ? `<small>${it.sub}</small>` : ""}</div>
-          <span class="pct ${it.battery != null && it.battery <= 20 ? "low" : ""}">${it.battery != null ? it.battery + "%" : ""}</span></div>`).join("")
+      ? show.map((it) => `<div class="batt-row" title="${esc(it.name)}"><span class="bicon">${deviceIcon(it.type)}</span>
+          <b>${esc(it.name)}</b>
+          <span class="pct ${it.battery == null ? "none" : ""}">${it.battery != null ? it.battery + "%" : "已連線"}</span>${glyph(it)}</div>`).join("")
+        + `<div class="batt-row empty"></div>`.repeat(Math.max(0, per - show.length))
       : show.map((it) => `<div class="batt-item" title="${esc(it.name)}">${ringHTML(it)}
           <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
     setHTML(pane, `<div class="batt" style="--rows:${per}">${body}</div>${dots}`);
-    // 大尺寸：先試一頁放 6 台，名字太長換行放不下時才少放一台
-    const box = pane.firstElementChild;
-    if (inst.size === "l" && box.scrollHeight > box.clientHeight + 1 && per > 3) {
-      inst.battFit = per - 1;
-      WIDGETS.battery.render(pane, inst);
-    }
   },
 };
 
@@ -837,7 +836,11 @@ WIDGETS.pinterest = {
   show(cell, p, inst, tries = 0) {
     const layers = cell.querySelectorAll(".pn-photo");
     const back = [...layers].find((l) => !l.classList.contains("on")) || layers[0];
-    const urls = [p.img, p.orig].filter((u, i, a) => u && a.indexOf(u) === i);
+    // 省記憶體：格子很小，不用載 600～736 寬的大圖（大圖解碼後一張就好幾 MB）。
+    // 中、大的格子用 236 寬，小的用 474 寬；載不到再退回原本的網址
+    const want = inst?.size === "s" ? "474x" : "236x";
+    const sized = /^https:\/\/i\.pinimg\.com\//.test(p.img || "") ? p.img.replace(/\/(\d+x\d*|originals)\//, `/${want}/`).replace(/\.(png|gif|webp)$/i, ".jpg") : "";
+    const urls = [sized, p.img, p.orig].filter((u, i, a) => u && a.indexOf(u) === i);
     const attempt = (k) => {
       const img = new Image();
       img.onload = () => {

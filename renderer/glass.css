@@ -21,7 +21,7 @@ html, body {
   overflow: hidden;
   color: var(--ink);
   /* Windows 11 的 Segoe UI Variable 是最接近 Apple SF 的系統字型 */
-  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
   letter-spacing: -0.01em;
   font-feature-settings: "tnum"; /* 數字等寬，跳動時不會左右晃 */
   -webkit-font-smoothing: antialiased;

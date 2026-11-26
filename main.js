@@ -1,5 +1,5 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net, powerMonitor } = require("electron");
-const { spawn } = require("child_process");
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net, powerMonitor, session } = require("electron");
+const { spawn, execFile } = require("child_process");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
@@ -10,7 +10,6 @@ const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
 const { createPhonePush } = require("./phone-push");
-const { createPinterestHome } = require("./pinterest-home");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
 // 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
@@ -63,22 +62,22 @@ const DEFAULTS = {
   // mode "rss"：讀公開網址；mode "api"：登入帳號（官方 API）
   pinterest: { mode: "rss", feed: "" },
   bluetooth: { notifyConnect: true, notifyLow: true, lowThreshold: 20, muted: {} },
-  calendar: { sources: [] }, // Google 日曆的 iCal 私人網址（加密存）
+  calendar: {}, // calendar.google：Google 登入資料（google.js，加密存）
   batteryWidget: { hidden: {}, order: [] }, // 電量小組件：哪些裝置不要顯示、排列順序
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
   phonePush: { on: false, token: "" }, // iPhone 捷徑：充電器接上／拔掉時直接通知電腦
-  pinterestHome: false, // Pinterest 用「首頁推薦」（讀網頁版首頁）
   // 大時鐘：世界時鐘的 4 個城市
   worldClocks: [
     { name: "台北", tz: "Asia/Taipei" }, { name: "東京", tz: "Asia/Tokyo" },
     { name: "倫敦", tz: "Europe/London" }, { name: "紐約", tz: "America/New_York" },
   ],
   pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
-  fontWeight: "bold", // 小組件字體：bold 全部粗體／light 全部細體
+  fontWeight: 600, // 小組件字體粗細：300（細）～ 800（粗），管理程式用滑桿調
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
+  gameMode: "game", // 遊戲模式：game＝玩 Steam 遊戲時／steam＝Steam 開著就算／off＝不用
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
 };
 const FIRST_RUN = !fs.existsSync(SETTINGS_FILE);
@@ -90,7 +89,7 @@ function loadSettings() {
       ...DEFAULTS, ...saved,
       widgets: { ...DEFAULTS.widgets, ...saved.widgets },
       sizes: { ...DEFAULTS.sizes, ...saved.sizes },
-      calendar: { ...DEFAULTS.calendar, ...saved.calendar },
+      calendar: { ...DEFAULTS.calendar, ...saved.calendar, sources: undefined }, // 舊版的 iCal 網址不再使用
       batteryWidget: { ...DEFAULTS.batteryWidget, ...saved.batteryWidget },
       audio: { ...DEFAULTS.audio, ...saved.audio },
       // 拿掉已經不存在的小組件（例如舊版的手機連結）
@@ -105,6 +104,12 @@ function loadSettings() {
   }
 }
 let settings = loadSettings();
+// 舊版存的是 "bold"／"light"
+function fontWeightOf(v) {
+  if (v === "light") return 400;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(800, Math.max(300, Math.round(n / 50) * 50)) : 600;
+}
 function saveSettings() {
   fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
@@ -201,7 +206,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, fontWeight: settings.fontWeight, pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, fontWeight: fontWeightOf(settings.fontWeight), pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
   sendLayout();
 }
 
@@ -244,9 +249,9 @@ function createHost() {
   // 畫面程式萬一當掉，自動重開，不會讓小組件整個消失
   hostWin.webContents.on("render-process-gone", (_e, d) => {
     log("host renderer gone", d);
-    if (app.isQuitting) return;
+    if (app.isQuitting || gaming) return;
     hostWin?.destroy();
-    setTimeout(createHost, 1000);
+    setTimeout(() => !gaming && createHost(), 1000);
   });
 }
 
@@ -346,12 +351,14 @@ function rebuildWidgets() {
 // 疊放改了：重新排版就好
 function syncStacks() {
   sendLayout();
+  syncPods();
 }
 function removeStack(key) {
   settings.stacks = (settings.stacks || []).filter((st) => `stack:${st.id}` !== key);
   delete settings.positions[key];
   saveSettings();
   sendLayout();
+  syncPods();
 }
 
 function showAllWidgets() {
@@ -403,6 +410,7 @@ function placePopup() {
 // 彈窗跟著小組件背景：淺色＝白底，其他＝黑底
 const popupPayload = (d) => ({ ...d, theme: settings.background === "light" ? "light" : "dark" });
 function showPopup(device) {
+  if (gaming) return; // 遊戲模式：通知視窗關掉了，也不要為了通知再開
   popupDevice = device;
   clearTimeout(popupTimer);
   const win = ensurePopup();
@@ -453,14 +461,17 @@ function startHelper() {
       if (!reported.has(kind)) { reported.add(kind); log("helper first", kind, Array.isArray(data) ? data.length : "?"); }
       if (kind === "bt" && Array.isArray(data)) handleDevices(data);
       else if (kind === "audio" && Array.isArray(data)) handleAudio(data);
+      else if (kind === "pods" && data && typeof data === "object") handlePods(data);
     }
   });
   helper.stderr.on("data", (d) => log("helper stderr", String(d).slice(0, 500)));
   let reported = new Set();
-  helper.on("exit", (code) => {
+  const proc = helper;
+  proc.on("exit", (code) => {
     log("helper exit", code);
+    if (helper !== proc) return; // 已經換成新的小幫手了（例如遊戲模式結束後重開）
     helper = null;
-    if (!app.isQuitting) setTimeout(() => { startHelper(); if (hostWin) pinToDesktop(hostWin); }, 5000); // 掛掉就重開
+    if (!app.isQuitting && !gaming) setTimeout(() => { if (!gaming && !helper) { startHelper(); syncPods(); if (hostWin) pinToDesktop(hostWin); } }, 5000); // 掛掉就重開（遊戲模式是故意關的）
   });
 }
 
@@ -530,6 +541,27 @@ const lastNotified = new Map(); // 裝置 id → 上次跳「已連線」通知�
 let rawDevices = [];
 let lastBroadcast = "";
 
+// AirPods 沒連這台電腦時，從它們的藍牙廣播讀到的電量（helper.ps1 的 pods）
+let pods = null; // { name, left, right, case, chargeLeft, chargeRight, chargeCase, model, at }
+const PODS_SHOW_MS = 3 * 3600e3; // 3 小時沒聽到就不顯示
+function handlePods(p) {
+  if (!pods || pods.model !== p.model) log("airpods seen", p.name, "model 0x" + Number(p.model).toString(16));
+  pods = { ...p, at: Date.now() };
+  if (!firstSnapshot) evaluateDevices(); // 藍牙清單第一次到之前先不算（不然開程式時會亂跳連線通知）
+}
+// 跟 iPhone 一樣分兩列：耳機（左右耳比較低的那個）、充電盒
+function podsDevices(now, list) {
+  if (!pods || now - pods.at > PODS_SHOW_MS) return [];
+  // AirPods 真的連在這台電腦上、而且 Windows 讀得到電量，就用那個，不重複顯示
+  if (list.some((d) => d.connected && d.battery != null && /airpods/i.test(d.name))) return [];
+  const buds = [pods.left, pods.right].filter((v) => v != null);
+  const out = [];
+  const base = { connected: true, passive: true, cod: null, le: true };
+  if (buds.length) out.push({ ...base, id: "airpods-adv", name: pods.name, battery: Math.min(...buds), charging: !!(pods.chargeLeft || pods.chargeRight) });
+  if (pods.case != null) out.push({ ...base, id: "airpods-adv-case", name: pods.name + " 充電盒", battery: pods.case, charging: !!pods.chargeCase });
+  return out;
+}
+
 function handleDevices(raw) {
   rawDevices = mergeSameDevice(raw);
   evaluateDevices();
@@ -551,6 +583,7 @@ function evaluateDevices() {
     }
     return out;
   });
+  next.push(...podsDevices(now, next));
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;
@@ -561,6 +594,7 @@ function evaluateDevices() {
   firstSnapshot = false;
   const bt = settings.bluetooth;
   for (const d of next) {
+    if (d.passive) continue; // 廣播讀到的 AirPods 不跳連線／低電量通知（它們沒連這台電腦）
     const muted = !!bt.muted[d.id]; // 在管理程式裡關掉這台的通知
     // 真的新連上的裝置 → 跳通知（開程式前就連著的不跳）
     if (!first && d.connected && !wasConnected.has(d.id)) {
@@ -584,7 +618,7 @@ function evaluateDevices() {
   }
 }
 // 斷線 45 秒後要把狀態改成「未連線」，所以定時再檢查一次
-setInterval(() => rawDevices.length && evaluateDevices(), 15 * 1000);
+setInterval(() => (rawDevices.length || pods) && !firstSnapshot && evaluateDevices(), 15 * 1000);
 
 function broadcast(channel, data) {
   for (const w of [hostWin, managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
@@ -623,17 +657,22 @@ function openManager(section) {
 function setWidgetEnabled(kind, on) {
   settings.widgets[kind] = on;
   sendLayout();
+  syncPods();
+}
+// AirPods 廣播監聽只在電量小組件有顯示時開著（沒顯示就不用一直收藍牙廣播）
+function syncPods() {
+  const shown = settings.widgets.battery || (settings.stacks || []).some((st) => st.items.includes("battery"));
+  helperSend(`pods ${shown ? "on" : "off"}`);
 }
 
 function managerState() {
   const { pinterest, calendar: _cal, ...rest } = settings;
   return {
     settings: { ...rest, positions: undefined },
-    // 行事曆網址是祕密，只給名稱和顏色
-    calendars: (settings.calendar.sources || []).map((c, i) => ({ name: c.name || `行事曆 ${i + 1}`, color: c.color })),
     devices,
     autostart: app.getLoginItemSettings().openAtLogin,
     desktopLayer: settings.desktopLayer !== false,
+    gaming,
     weatherSource: settings.weatherSource || "openmeteo",
     cwaHasKey: cwa.hasKey(),
     locate: locateInfo,
@@ -706,12 +745,19 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
   if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
   if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
   if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");
-  if (["bold", "light"].includes(patch.fontWeight)) { settings.fontWeight = patch.fontWeight; sendHostInit(); }
+  if (patch.fontWeight != null) {
+    settings.fontWeight = fontWeightOf(patch.fontWeight);
+    sendToKind(null, "glass:font", settings.fontWeight); // 只換字體，不用整個重來（拖滑桿時才順）
+  }
   if (["glass", "dark", "light"].includes(patch.background)) {
     settings.background = patch.background;
     sendToKind(null, "glass:background", settings.background);
   }
   if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
+  if (["game", "steam", "off"].includes(patch.gameMode)) {
+    settings.gameMode = patch.gameMode;
+    checkGame();
+  }
   if ("desktopLayer" in patch) {
     settings.desktopLayer = !!patch.desktopLayer;
     log("desktopLayer", settings.desktopLayer);
@@ -835,18 +881,12 @@ async function fetchPinsRss() {
 
 const pinApi = createPinterestApi({ settings, save: saveSettings });
 
-const pinHome = createPinterestHome(log);
 async function fetchPins() {
   const r = await fetchPinsRaw();
-  log("pins", { home: !!settings.pinterestHome, count: r.pins?.length || 0, error: r.error || "", sample: r.pins?.[0]?.img || "" });
+  log("pins", { count: r.pins?.length || 0, error: r.error || "", sample: r.pins?.[0]?.img || "" });
   return r;
 }
 async function fetchPinsRaw() {
-  // 首頁推薦（依興趣）：讀不到時退回圖版／公開網址
-  if (settings.pinterestHome) {
-    const r = await pinHome.fetchHome();
-    if (r.pins || r.loginExpired) return r;
-  }
   if (settings.pinterest.mode !== "api") return fetchPinsRss();
   try {
     return await pinApi.fetchPins();
@@ -854,27 +894,15 @@ async function fetchPinsRaw() {
     return { error: e.message, loginExpired: !!e.loginExpired, accessDenied: !!e.accessDenied };
   }
 }
+// 舊版的「首頁推薦」拿掉了：把它留在電腦裡的網頁登入資料清掉（只做一次）
+function cleanupPinterestHome() {
+  if (!("pinterestHome" in settings)) return;
+  delete settings.pinterestHome;
+  saveSettings();
+  session.fromPartition("persist:pinterest-web").clearStorageData().catch(() => {});
+}
 
 ipcMain.handle("pins:get", fetchPins);
-ipcMain.handle("pins:home-status", async () => ({ on: !!settings.pinterestHome, loggedIn: await pinHome.isLoggedIn() }));
-ipcMain.handle("pins:home-login", async () => {
-  const ok = (await pinHome.login()) || (await pinHome.isLoggedIn());
-  if (ok) { settings.pinterestHome = true; saveSettings(); sendToKind("pinterest", "pins:changed"); }
-  return { ok };
-});
-ipcMain.handle("pins:home-set", async (_e, on) => {
-  settings.pinterestHome = !!on;
-  saveSettings();
-  sendToKind("pinterest", "pins:changed");
-  return { on: settings.pinterestHome };
-});
-ipcMain.handle("pins:home-logout", async () => {
-  await pinHome.logout();
-  settings.pinterestHome = false;
-  saveSettings();
-  sendToKind("pinterest", "pins:changed");
-  return { ok: true };
-});
 ipcMain.handle("pins:status", () => ({
   loggedIn: pinApi.isLoggedIn(),
   username: settings.pinterest.username || "",
@@ -920,7 +948,7 @@ const cwa = createCwa(settings, saveSettings, log);
 const phonePush = createPhonePush(settings, saveSettings, (st) => {
   evaluateDevices();
   const phone = devices.find((d) => d.connected && /iphone/i.test(d.name));
-  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone || { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
+  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone ? { ...phone, charging: true, battery: st.level ?? phone.battery } : { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
   else if (phone && popupDevice?.id === phone.id && popup && !popup.isDestroyed()) popup.webContents.send("popup:device", popupPayload(phone));
 }, log);
 ipcMain.handle("phone:info", () => phonePush.info());
@@ -997,15 +1025,13 @@ function startAutoLocate() {
 /* ───────── Google 日曆 ───────── */
 const google = createGoogle({ settings, save: saveSettings, config: OAUTH.google });
 const calendar = createCalendar({
-  settings, save: saveSettings, google,
+  google,
   onUpdate: (data) => {
     sendToKind("calendar", "cal:update", data);
     managerWin?.webContents.send("mgr:refresh");
   },
 });
 ipcMain.handle("cal:get", () => calendar.get());
-ipcMain.handle("cal:add", (_e, url) => calendar.add(url));
-ipcMain.handle("cal:remove", (_e, i) => calendar.remove(Number(i)));
 ipcMain.handle("cal:refresh", () => calendar.refresh());
 ipcMain.handle("google:status", () => ({ configured: google.configured(), loggedIn: google.isLoggedIn(), email: google.email() }));
 ipcMain.handle("google:login", async () => {
@@ -1021,6 +1047,59 @@ ipcMain.handle("google:calendars", async () => {
 ipcMain.handle("google:choose", (_e, id, on) => { google.chooseCalendar(String(id), !!on); return calendar.refresh(); });
 ipcMain.on("popup:close", () => { clearTimeout(popupTimer); popupDevice = null; popup?.setIgnoreMouseEvents(true, { forward: true }); }); // 瀏海收回去了
 
+/* ───────── 遊戲模式：玩遊戲時把小組件整個關掉，省記憶體 ───────── */
+// 玩全螢幕遊戲時桌面本來就看不到，所以把小組件畫面、瀏海通知、背景小幫手（PowerShell）都關掉，
+// 只留主程式偵測什麼時候玩完；玩完自動全部開回來。
+// 偵測方式：Steam 會在登錄檔 HKCU\Software\Valve\Steam 的 RunningAppID 寫「正在玩的遊戲編號」（沒在玩是 0）。
+let gaming = false;
+let gameChecking = false;
+function runQuiet(cmd, args) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { windowsHide: true, timeout: 5000 }, (err, stdout) => resolve(err ? "" : String(stdout)));
+  });
+}
+async function detectGame() {
+  const mode = settings.gameMode || "game";
+  if (mode === "off" || process.platform !== "win32") return false;
+  if (mode === "steam") {
+    const out = await runQuiet("tasklist", ["/FI", "IMAGENAME eq steam.exe", "/NH", "/FO", "CSV"]);
+    return /"steam\.exe"/i.test(out);
+  }
+  const out = await runQuiet("reg", ["query", "HKCU\\Software\\Valve\\Steam", "/v", "RunningAppID"]);
+  const m = out.match(/RunningAppID\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+  return !!m && parseInt(m[1], 16) !== 0;
+}
+async function checkGame() {
+  if (gameChecking) return;
+  gameChecking = true;
+  try {
+    const on = await detectGame();
+    if (on !== gaming) setGaming(on);
+  } finally { gameChecking = false; }
+}
+function setGaming(on) {
+  gaming = on;
+  log("game mode", on);
+  tray?.setToolTip(on ? "Glass Widgets（遊戲模式：小組件暫停）" : "Glass Widgets");
+  if (on) {
+    hidePopup();
+    for (const w of [hostWin, popup]) if (w && !w.isDestroyed()) w.destroy();
+    hostWin = null; popup = null; popupReady = false;
+    if (helper) { helper.kill(); helper = null; }
+    session.defaultSession.clearCache().catch(() => {}); // 圖片、網頁快取也清掉
+  } else {
+    firstSnapshot = true; // 玩遊戲時接上的裝置不要一口氣跳一堆通知
+    if (!helper) { startHelper(); syncPods(); }
+    createHost();
+    ensurePopup();
+  }
+  managerWin?.webContents.send("mgr:refresh");
+}
+function startGameWatch() {
+  setTimeout(checkGame, 10 * 1000);
+  setInterval(checkGame, 15 * 1000); // 每 15 秒看一次（只是讀一個登錄檔值，很輕）
+}
+
 /* ───────── 啟動 ───────── */
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -1035,6 +1114,8 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("click", () => openManager());
     buildTrayMenu();
     startHelper();
+    syncPods();
+    cleanupPinterestHome();
     phonePush.apply();
     createHost();
     refreshWallpaper(true);
@@ -1043,6 +1124,7 @@ if (!app.requestSingleInstanceLock()) {
     calendar.start();
     setupUpdater();
     startAutoLocate();
+    startGameWatch();
     ensurePopup(); // 先把通知視窗建好
     // 鎖定螢幕、睡眠時小組件停止更新，省電
     powerMonitor.on("lock-screen", () => setPaused(true));

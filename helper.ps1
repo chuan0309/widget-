@@ -2,7 +2,7 @@
 # needs Windows APIs (one process instead of four saves a lot of memory).
 #
 # Prints lines "<kind> <json>" whenever something changes:
-#   bt     Bluetooth devices: [{id, name, connected, battery, cod, le}]   (every 4 s)
+#   bt     Bluetooth devices: [{id, name, connected, battery, cod, le}]   (every 8 s)
 #   audio  playback devices: [{id, name, default}]                        (every 2 s)
 # Reads commands from stdin:
 #   pin <hwnd>         keep a window on the desktop layer
@@ -252,7 +252,7 @@ $KEY_CONNECTED = '{83DA6326-97A6-4088-9453-A1923F573B29} 15'
 $KEY_BATTERY   = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $KEY_COD       = '{2BD67D8B-8BEB-48D5-87E0-6CDA3428040A} 10'   # Bluetooth Class of Device
 
-$POLL_SECONDS = 4
+$POLL_SECONDS = 8   # 4 → 8 s: the PnP query is the heaviest thing the helper does
 $USB_HEADSETS = @('INZONE')   # name keywords of headsets that use their own USB receiver
 $GATT_EVERY_SECONDS = 120
 
@@ -454,7 +454,7 @@ public static class StdinPump {
 [StdinPump]::Start()
 
 # ===== Main loop =====
-$last = @{ bt = ''; audio = '' }
+$last = @{ bt = ''; audio = ''; pods = '' }
 $due = @{ bt = [datetime]::MinValue; audio = [datetime]::MinValue }
 function Emit([string]$kind, [string]$json) {
   if ($json -and $json -ne $last[$kind]) {
@@ -464,12 +464,99 @@ function Emit([string]$kind, [string]$json) {
   }
 }
 
+# ===== AirPods battery from their Bluetooth advertisements =====
+# AirPods that are NOT connected to this PC still broadcast an Apple "proximity pairing"
+# advertisement (the one that makes the iPhone show the battery card) while they are
+# out of the case or the lid is open. It holds left / right / case battery in 10% steps
+# and charging flags, so we can listen without pairing. Several nearby AirPods → keep
+# the strongest signal.
+$podsReady = $false
+$podsBest = $null
+try {
+  $null = [Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+  $podsWatcher = New-Object Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher
+  $podsWatcher.ScanningMode = [Windows.Devices.Bluetooth.Advertisement.BluetoothLEScanningMode]::Passive
+  $null = Register-ObjectEvent -InputObject $podsWatcher -EventName Received -SourceIdentifier 'pods-adv'
+  $podsReady = $true   # main.js sends "pods on" only while the battery widget is shown (saves CPU otherwise)
+  [Console]::Error.WriteLine("pods watcher ready")
+} catch { [Console]::Error.WriteLine("pods watcher failed: $($_.Exception.Message)") }
+
+# Model id (bytes 3-4 of the packet) → name; unknown ids still work, just named "AirPods"
+$POD_MODELS = @{ 0x0220 = 'AirPods'; 0x0F20 = 'AirPods 2'; 0x1320 = 'AirPods 3'; 0x0E20 = 'AirPods Pro';
+  0x1420 = 'AirPods Pro 2'; 0x2420 = 'AirPods Pro 2'; 0x0A20 = 'AirPods Max'; 0x1F20 = 'AirPods Max';
+  0x1920 = 'AirPods 4'; 0x1B20 = 'AirPods 4'; 0x2720 = 'AirPods Pro 3' }
+
+function Read-PodsPacket($bytes, [int]$rssi) {
+  if ($bytes.Length -lt 9 -or $bytes[0] -ne 0x07) { return $null }
+  $model = ([int]$bytes[3] -shl 8) -bor [int]$bytes[4]
+  $flip = (($bytes[5] -shr 4) -band 0x02) -eq 0
+  $hi = ($bytes[6] -shr 4) -band 0x0F; $lo = $bytes[6] -band 0x0F
+  $l = if ($flip) { $hi } else { $lo }; $r = if ($flip) { $lo } else { $hi }
+  $c = $bytes[7] -band 0x0F; $chg = ($bytes[7] -shr 4) -band 0x0F
+  $pct = { param($v) if ($v -le 10) { $v * 10 } else { $null } }
+  return [ordered]@{
+    model = $model; name = $(if ($POD_MODELS.ContainsKey($model)) { $POD_MODELS[$model] } else { 'AirPods' })
+    left = (& $pct $l); right = (& $pct $r); case = (& $pct $c)
+    chargeLeft = (($chg -band $(if ($flip) { 2 } else { 1 })) -ne 0)
+    chargeRight = (($chg -band $(if ($flip) { 1 } else { 2 })) -ne 0)
+    chargeCase = (($chg -band 4) -ne 0)
+    rssi = $rssi
+  }
+}
+
+$podsRetry = [datetime]::MinValue
+$podsWanted = $false
+function Set-Pods([bool]$on) {
+  if ($on -eq $script:podsWanted) { return }
+  $script:podsWanted = $on
+  if (-not $podsReady) { return }
+  try {
+    if ($on) { $podsWatcher.Start() } else {
+      $podsWatcher.Stop()
+      Get-Event -SourceIdentifier 'pods-adv' -ErrorAction SilentlyContinue | Remove-Event -ErrorAction SilentlyContinue
+    }
+  } catch {}
+}
+function Update-Pods {
+  if (-not $podsReady -or -not $podsWanted) { return }
+  # Bluetooth turned off and on again → the watcher stops ("Aborted"); start it again
+  if ($podsWatcher.Status -eq [Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcherStatus]::Aborted -and (Get-Date) -ge $script:podsRetry) {
+    $script:podsRetry = (Get-Date).AddSeconds(30)
+    try { $podsWatcher.Start() } catch {}
+  }
+  $events = @(Get-Event -SourceIdentifier 'pods-adv' -ErrorAction SilentlyContinue)
+  $now = Get-Date
+  foreach ($ev in $events) {
+    try {
+      $a = $ev.SourceEventArgs
+      foreach ($m in $a.Advertisement.ManufacturerData) {
+        if ($m.CompanyId -ne 0x004C) { continue }
+        $bytes = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::ToArray($m.Data)
+        $p = Read-PodsPacket $bytes ([int]$a.RawSignalStrengthInDBm)
+        if (-not $p -or ($p.left -eq $null -and $p.right -eq $null)) { continue }
+        # keep the strongest AirPods; switch to a weaker one only after 30 s without the strong one
+        if (-not $podsBest -or $p.rssi -ge $podsBest.p.rssi - 3 -or ($now - $podsBest.at).TotalSeconds -gt 30) {
+          $script:podsBest = @{ p = $p; at = $now }
+        }
+      }
+    } catch {}
+    Remove-Event -EventIdentifier $ev.EventIdentifier -ErrorAction SilentlyContinue
+  }
+  if ($podsBest) {
+    $out = [ordered]@{}; foreach ($k in $podsBest.p.Keys) { if ($k -ne 'rssi') { $out[$k] = $podsBest.p[$k] } }
+    $out.seen = $podsBest.at.ToString('HH:mm')   # changes once a minute so main.js knows they are still around
+    Emit 'pods' (ConvertTo-Json -InputObject $out -Compress)
+  }
+}
+
 while ($true) {
   # Commands from main.js (checked often so pinning feels instant)
   if ([StdinPump]::Closed) { exit }   # main.js went away
   while (($line = [StdinPump]::Next()) -ne $null) {
     if ($line -match '^pin (\d+)$') {
       try { [DesktopPin]::Pin([long]$Matches[1]) } catch {}
+    } elseif ($line -match '^pods (on|off)$') {
+      Set-Pods ($Matches[1] -eq 'on')
     } elseif ($line -match '^audio-set (.+)$') {
       try { $null = [GlassWidgets.Audio]::SetDefault($Matches[1].Trim()) } catch {}
       $due.audio = [datetime]::MinValue   # report the new default right away
@@ -479,5 +566,6 @@ while ($true) {
   $now = Get-Date
   if ($now -ge $due.audio) { try { Emit 'audio' (Get-AudioJson) } catch {}; $due.audio = $now.AddSeconds(2) }
   if ($now -ge $due.bt)    { try { Emit 'bt' (Get-BtJson) } catch {}; $due.bt = (Get-Date).AddSeconds($POLL_SECONDS) }
+  try { Update-Pods } catch {}
   Start-Sleep -Milliseconds 150
 }
