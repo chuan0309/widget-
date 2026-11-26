@@ -23,6 +23,13 @@ function setHTML(el, html) {
 const setTint = (v) => document.body.style.setProperty("--t", String(Math.min(100, Math.max(0, Number(v))) / 100));
 setTint(30);
 api.onTint?.(setTint);
+// 背景：透明玻璃／深色／淺色
+const setBackground = (b) => {
+  document.body.classList.remove("bg-glass", "bg-dark", "bg-light");
+  document.body.classList.add(`bg-${["dark", "light"].includes(b) ? b : "glass"}`);
+};
+setBackground("glass");
+api.onBackground?.(setBackground);
 
 /* ───────── 日期小工具 ───────── */
 const WEEK = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -98,6 +105,7 @@ api.onHostInit?.((d) => {
   wall = d.wall;
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
+  if (d.background) setBackground(d.background);
   for (const inst of instances.values()) layoutBackdrop(inst);
 });
 
@@ -363,6 +371,17 @@ function weatherLook(code) {
   if (code <= 77 || code === 85 || code === 86) return ["下雪", "snowy", "#fff"];
   return ["雷雨", "storm", "#ffd60a"];
 }
+// 「晚上7時」這種說法（跟 iPhone 一樣）
+function hourLabel(h) {
+  const part = h < 6 ? "凌晨" : h < 12 ? "上午" : h === 12 ? "中午" : h < 18 ? "下午" : "晚上";
+  return `${part}${h % 12 || 12}時`;
+}
+// 溫度條的顏色：冷的偏藍綠、熱的偏橘紅（像 Apple 天氣）
+function tempColor(t) {
+  const stops = [[5, "#64d2ff"], [14, "#8fd6a5"], [20, "#d6dd6b"], [25, "#ffd60a"], [30, "#ff9f0a"], [35, "#ff453a"]];
+  for (const [v, c] of stops) if (t <= v) return c;
+  return "#ff453a";
+}
 // 天氣背景：像 Apple 天氣一樣用天空的顏色
 function skyClass(code, isDay) {
   const night = isDay === 0;
@@ -408,7 +427,7 @@ WIDGETS.weather = {
     const cur = data.current;
     const [desc, iconName, color] = weatherLook(cur.weather_code);
     pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
-    const range = `高 ${Math.round(data.daily.temperature_2m_max[0])}° 低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
+    const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
         <div class="wt-top"><div class="wt-city">${esc(city.name)}</div><span class="wt-icon" style="color:${color}">${icon(iconName)}</span></div>
@@ -417,9 +436,9 @@ WIDGETS.weather = {
       return;
     }
     const nowIdx = Math.max(0, data.hourly.time.findIndex((t) => new Date(t) > new Date()) - 1);
-    const hours = data.hourly.time.slice(nowIdx, nowIdx + 6).map((t, i) => {
+    const hours = data.hourly.time.slice(nowIdx, nowIdx + 5).map((t, i) => {
       const k = nowIdx + i;
-      return `<div class="wt-hour"><small>${i === 0 ? "現在" : new Date(t).getHours() + "時"}</small>
+      return `<div class="wt-hour"><small>${i === 0 ? "現在" : hourLabel(new Date(t).getHours())}</small>
         ${wIcon(data.hourly.weather_code[k])}<span>${Math.round(data.hourly.temperature_2m[k])}°</span></div>`;
     }).join("");
     let days = "";
@@ -430,7 +449,7 @@ WIDGETS.weather = {
         const left = ((a - min) / (max - min || 1)) * 100, width = ((b - a) / (max - min || 1)) * 100;
         return `<div class="wt-day"><span>${i === 0 ? "今天" : "週" + WEEK_SHORT[new Date(t).getDay()]}</span>
           ${wIcon(data.daily.weather_code[i])}<span class="lo">${Math.round(a)}°</span>
-          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%"></i></span><span>${Math.round(b)}°</span></div>`;
+          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%;background:linear-gradient(90deg,${tempColor(a)},${tempColor(b)})"></i></span><span>${Math.round(b)}°</span></div>`;
       }).join("")}</div>`;
     }
     setHTML(pane, `<div class="wt">
@@ -571,13 +590,18 @@ function evTime(ev) {
 const evHTML = (ev) => `<div class="cal-ev" style="--c:${esc(ev.color)}"><b>${esc(ev.title)}</b><small>${evTime(ev)}</small></div>`;
 const upcoming = (events, now) => events.filter((e) => (e.allDay ? e.end - 1 : e.end) >= (e.allDay ? dayStart(now).getTime() : now.getTime()));
 function groupedList(events, max, now) {
-  let html = "", last = "";
+  let html = "", last = "", lastDay = null;
+  const dayOf = (ev) => dayStart(new Date(Math.max(ev.start, dayStart(now).getTime()))).getTime();
   for (const ev of events.slice(0, max)) {
-    const d = new Date(Math.max(ev.start, dayStart(now).getTime()));
-    const label = sameDay(d, now) ? "今天" : `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`;
+    const d = new Date(dayOf(ev));
+    const label = sameDay(d, now) ? "今天" : `${d.getMonth() + 1}月${d.getDate()}日${WEEK[d.getDay()]}`;
     if (label !== last) { html += `<div class="cal-head">${label}</div>`; last = label; }
     html += evHTML(ev);
+    lastDay = d.getTime();
   }
+  // 最後那天還有放不下的行程：「其他 N 個行程」（跟 iPhone 一樣）
+  const more = events.slice(max).filter((ev) => dayOf(ev) === lastDay).length;
+  if (more) html += `<div class="cal-more">其他 ${more} 個行程</div>`;
   return html;
 }
 
@@ -593,10 +617,15 @@ WIDGETS.calendar = {
     const events = upcoming(cal.events, now);
     const todayEv = events.filter((e) => e.start < dayStart(new Date(now.getTime() + 864e5)).getTime());
     const l = lunar(now);
-    const todayBlock = `<div class="cal-today">
-        <span class="cal-week">${WEEK[now.getDay()]}</span><span class="cal-day">${now.getDate()}</span>
-        <span class="cal-lunar">${l.day ? "農曆" + l.month + l.day : ""}</span>
-        ${todayEv.length === 0 && inst.size === "m" ? `<span class="cal-empty">今天沒有行程</span>` : ""}</div>`;
+    // 像 iPhone：大大的日期，旁邊直排農曆和紅色星期
+    const vert = (text, cls) => `<span class="cal-v ${cls}">${[...text].map((c) => `<i>${c}</i>`).join("")}</span>`;
+    const todayBlock = inst.size === "m"
+      ? `<div class="cal-today">
+          <div class="cal-top"><span class="cal-day">${now.getDate()}</span>${l.day ? vert(l.day, "lunar") : ""}${vert("週" + WEEK_SHORT[now.getDay()], "week")}</div>
+          ${todayEv.length === 0 ? `<span class="cal-empty">今天沒有行程</span>` : ""}</div>`
+      : `<div class="cal-today">
+          <span class="cal-week">${WEEK[now.getDay()]}</span><span class="cal-day">${now.getDate()}</span>
+          <span class="cal-lunar">${l.day ? "農曆" + l.month + l.day : ""}</span></div>`;
     if (inst.size === "s") {
       const next = events[0];
       const when = next && !sameDay(new Date(Math.max(next.start, now.getTime())), now)

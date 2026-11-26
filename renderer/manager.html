@@ -49,7 +49,14 @@
     <!-- 外觀 -->
     <section data-section="look">
       <h1>外觀</h1>
-      <p class="lead">小組件是蘋果那種大圓角毛玻璃，玻璃後面是模糊的桌布。</p>
+      <p class="lead">小組件的背景，跟 iPhone 一樣可以選透明或純色。</p>
+      <h2>背景</h2>
+      <div class="bg-grid">
+        <button class="bg-card" data-bg="glass"><span class="bg-swatch glass"><b>22°</b></span><span>透明玻璃</span></button>
+        <button class="bg-card" data-bg="dark"><span class="bg-swatch dark"><b>22°</b></span><span>深色</span></button>
+        <button class="bg-card" data-bg="light"><span class="bg-swatch light"><b>22°</b></span><span>淺色</span></button>
+      </div>
+      <div id="tintBlock">
       <h2>透明程度</h2>
       <div class="tint-preview" id="tintPreview">
         <div class="tp-widget"><b>22°</b><small>台北市・晴時多雲</small></div>
@@ -61,6 +68,7 @@
         <span class="tint-icon tinted" title="不同色調"><i></i><i></i></span>
       </div>
       <p class="hint">往左「透明」會更透明，看得到更多桌布；往右「不同色調」會更不透明，字比較清楚。拖動時桌面上的小組件會馬上跟著變。</p>
+      </div>
     </section>
 
     <!-- 藍牙 -->

@@ -1,6 +1,8 @@
 :root {
-  --ink: #fff;
-  --ink-soft: rgba(255, 255, 255, 0.7);
+  /* 字和線的顏色（淺色背景時換成黑色） */
+  --fg: 255 255 255;
+  --ink: rgb(var(--fg));
+  --ink-soft: rgb(var(--fg) / 0.62);
   --accent: #0a84ff;
   --ok: #30d158;
   --ease-spring: cubic-bezier(0.32, 1.4, 0.4, 1);
@@ -70,6 +72,15 @@ body { --t: 0.3; }
   -webkit-mask-composite: xor;
 }
 
+/* ───────── 背景：透明玻璃（預設）／深色／淺色，像 Apple 一樣 ───────── */
+body.bg-dark .card > .backdrop, body.bg-light .card > .backdrop { display: none; }
+body.bg-dark .card { background: #1c1c1e; }
+body.bg-dark .card::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 50%); }
+body.bg-light { --fg: 0 0 0; --ink: #000; --ink-soft: rgb(0 0 0 / 0.5); }
+body.bg-light .card { background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 1px 2px rgba(0, 0, 0, 0.08); }
+body.bg-light .card::after { background: none; }
+body.bg-light .card::before { background: linear-gradient(170deg, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0.06)); }
+
 /* 小組件內容 */
 .pane { position: absolute; inset: 0; z-index: 1; }
 
@@ -93,23 +104,23 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
   border-radius: 50%;
   display: grid; place-items: center;
   position: relative;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgb(var(--fg) / 0.07);
   transition: --p 1s;
 }
 .ring::before {
   content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgba(255, 255, 255, 0.16) 0);
+  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgb(var(--fg) / 0.16) 0);
   -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 86%);
 }
 .ring.low { --ring-color: #ff453a; }
-.ring.unknown { --ring-color: rgba(255, 255, 255, 0.45); }
+.ring.unknown { --ring-color: rgb(var(--fg) / 0.45); }
 .ring svg:not(.ms) {
   width: calc(var(--size) * 0.4); height: calc(var(--size) * 0.4);
-  fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
 
 /* Material Symbols 圖示：實心白色 */
-svg.ms { fill: #fff; stroke: none; }
+svg.ms { fill: var(--ink); stroke: none; }
 .ring svg.ms { width: calc(var(--size) * 0.46); height: calc(var(--size) * 0.46); }
 
 @media (prefers-reduced-motion: reduce) {
