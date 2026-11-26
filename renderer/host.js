@@ -324,7 +324,10 @@ const WIDGETS = {};
 WIDGETS.clock = {
   mount(pane) {
     pane.innerHTML = `
-      <div class="analog"><i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>
+      <div class="analog">${Array.from({ length: 12 }, (_, i) => {
+        const a = ((i + 1) * 30 - 90) * Math.PI / 180;
+        return `<span class="num" style="left:${50 + 36 * Math.cos(a)}%;top:${50 + 36 * Math.sin(a)}%">${i + 1}</span>`;
+      }).join("")}<i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>
       <div class="clock-info"><div class="digital"></div>
         <div class="clock-meta"><span class="cm-week"></span><b class="cm-day"></b></div>
         <div class="clock-date"></div><div class="lunar"></div></div>`;
@@ -360,6 +363,15 @@ function weatherLook(code) {
   if (code <= 77 || code === 85 || code === 86) return ["下雪", "snowy", "#fff"];
   return ["雷雨", "storm", "#ffd60a"];
 }
+// 天氣背景：像 Apple 天氣一樣用天空的顏色
+function skyClass(code, isDay) {
+  const night = isDay === 0;
+  if (code <= 1) return night ? "sky-clear-night" : "sky-clear";
+  if (code <= 48) return night ? "sky-cloud-night" : "sky-cloud";
+  if (code <= 67 || (code >= 80 && code <= 82)) return night ? "sky-rain-night" : "sky-rain";
+  if (code <= 77 || code === 85 || code === 86) return "sky-snow";
+  return "sky-storm";
+}
 const wIcon = (code) => { const [, name, color] = weatherLook(code); return `<span style="color:${color}">${icon(name)}</span>`; };
 
 let weatherAt = 0;
@@ -371,7 +383,7 @@ async function loadWeather(force = false) {
   store.city = city;
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
-      "&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code" +
+      "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code" +
       "&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=6";
     store.weather = await (await fetch(url)).json();
     store.weatherError = false;
@@ -395,6 +407,7 @@ WIDGETS.weather = {
     }
     const cur = data.current;
     const [desc, iconName, color] = weatherLook(cur.weather_code);
+    pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
     const range = `高 ${Math.round(data.daily.temperature_2m_max[0])}° 低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
@@ -430,11 +443,24 @@ WIDGETS.weather = {
 };
 
 /* ───────── 電量 ───────── */
+// 藍牙只會回報電量，不會說有沒有在充電；電量往上升就當作在充電（下降或 15 分鐘沒再升就取消）
+const battTrend = new Map(); // id -> { level, chargingUntil }
+function chargingGuess(id, level) {
+  if (level == null) return false;
+  const now = Date.now();
+  const t = battTrend.get(id);
+  if (!t) { battTrend.set(id, { level, chargingUntil: 0 }); return false; }
+  if (level > t.level) t.chargingUntil = now + 15 * 60 * 1000;
+  else if (level < t.level) t.chargingUntil = 0;
+  t.level = level;
+  return now < t.chargingUntil || level === 100 && t.chargingUntil > 0;
+}
 function batteryList() {
   const list = [];
-  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), sub: store.pc.charging ? "充電中" : "" });
+  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging, sub: store.pc.charging ? "充電中" : "" });
   for (const d of store.devices.filter((d) => d.connected)) {
-    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, sub: d.battery == null ? "已連線" : "" });
+    const charging = chargingGuess(d.id, d.battery);
+    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : charging ? "充電中" : "" });
   }
   // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面
   const order = store.batteryPrefs.order || [];
@@ -443,7 +469,8 @@ function batteryList() {
 }
 const ringHTML = (it) => {
   const state = it.battery == null ? "unknown" : it.battery <= 20 ? "low" : "";
-  return `<div class="ring ${state}" style="--p:${it.battery ?? 100}">${deviceIcon(it.type)}</div>`;
+  const bolt = it.charging ? `<svg class="bolt" viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : "";
+  return `<div class="ring ${state} ${it.charging ? "charging" : ""}" style="--p:${it.battery ?? 100}">${deviceIcon(it.type)}${bolt}</div>`;
 };
 
 // 一頁放幾台：中 4 台；大的照實際放得下的數量（最多 6 台）
@@ -473,13 +500,12 @@ WIDGETS.battery = {
     const show = list.slice(inst.battPage * per, (inst.battPage + 1) * per);
     const body = inst.size === "l"
       ? show.map((it) => `<div class="batt-row">${ringHTML(it)}
-          <div><b>${esc(it.name)}</b>${it.sub ? `<small>${it.sub}</small>` : ""}
-          ${it.battery != null ? `<div class="batt-bar"><i class="${it.battery <= 20 ? "low" : ""}" style="width:${it.battery}%"></i></div>` : ""}</div>
-          <span class="pct">${it.battery != null ? it.battery + "%" : ""}</span></div>`).join("")
+          <div><b>${esc(it.name)}</b>${it.sub ? `<small>${it.sub}</small>` : ""}</div>
+          <span class="pct ${it.battery != null && it.battery <= 20 ? "low" : ""}">${it.battery != null ? it.battery + "%" : ""}</span></div>`).join("")
       : show.map((it) => `<div class="batt-item" title="${esc(it.name)}">${ringHTML(it)}
           <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
-    setHTML(pane, `<div class="batt">${body}</div>${dots}`);
+    setHTML(pane, `<div class="batt" style="--rows:${per}">${body}</div>${dots}`);
     // 大尺寸：先試一頁放 6 台，名字太長換行放不下時才少放一台
     const box = pane.firstElementChild;
     if (inst.size === "l" && box.scrollHeight > box.clientHeight + 1 && per > 3) {

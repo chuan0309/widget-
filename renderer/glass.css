@@ -11,7 +11,9 @@ html, body {
   background: transparent;
   overflow: hidden;
   color: var(--ink);
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  /* Windows 11 的 Segoe UI Variable 是最接近 Apple SF 的系統字型 */
+  font-family: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  letter-spacing: -0.01em;
   font-feature-settings: "tnum"; /* 數字等寬，跳動時不會左右晃 */
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -25,7 +27,8 @@ body { --t: 0.3; }
    所有小組件都在同一個透明視窗裡，用 transform 擺位置（拖動時只有顯示卡在動，很順）。 */
 .card {
   position: absolute; left: 0; top: 0;
-  --r: 38px;
+  /* Apple 同大小的小組件圓角大約 22～24px；太圓會像泡泡、很玩具感 */
+  --r: 24px;
   border-radius: var(--r);
   corner-shape: superellipse(1.5);
   overflow: hidden;
@@ -33,37 +36,36 @@ body { --t: 0.3; }
   touch-action: none;
   will-change: transform;
   background: rgba(30, 32, 40, 0.5); /* 還沒拿到桌布時的底色 */
-  /* 像 macOS 的小組件：底下一層很淡的影子，浮在桌布上 */
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
-  text-shadow: 0 1px 2px rgb(0 0 0 / calc(0.4 - var(--t) * 0.3));
+  /* 很淡、很散的影子，像 macOS 桌面上的小組件（字不加陰影，保持乾淨） */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.card.dragging { z-index: 10; cursor: grabbing; box-shadow: 0 22px 50px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2); }
+.card.dragging { z-index: 10; cursor: grabbing; box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.16); }
 .card.snapping { transition: transform 0.28s cubic-bezier(0.32, 1.2, 0.45, 1); }
 
-/* 模糊的桌布（只模糊小組件後面那一塊，多留一點邊） */
+/* 模糊的桌布（只模糊小組件後面那一塊，多留一點邊）：模糊得夠、顏色飽和，才不會像霧玻璃 */
 .card > .backdrop {
   position: absolute; left: -48px; top: -48px; right: -48px; bottom: -48px;
   z-index: 0; pointer-events: none;
   background-repeat: no-repeat;
-  filter: blur(calc(14px + var(--t) * 22px)) saturate(calc(1.8 - var(--t) * 0.5)) brightness(calc(1.04 - var(--t) * 0.12));
+  filter: blur(calc(28px + var(--t) * 18px)) saturate(1.7) brightness(calc(0.97 - var(--t) * 0.15));
 }
 
-/* 玻璃本身：越透明越清澈；往「不同色調」越深 */
+/* 玻璃本身：一層深色（往「不同色調」越深），上面一點點亮光 */
 .card::after {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   border-radius: inherit; corner-shape: inherit;
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.02)),
-    rgb(18 20 28 / calc(0.06 + var(--t) * 0.6));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 45%),
+    rgb(14 16 22 / calc(0.12 + var(--t) * 0.5));
 }
-/* 玻璃邊：左上亮、右下帶一點反光，像 iOS 26 的液態玻璃 */
+/* 玻璃邊：很細的反光，上面亮、下面幾乎看不到 */
 .card::before {
   content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   border-radius: inherit; corner-shape: inherit;
   padding: 1px;
-  background: linear-gradient(145deg,
-    rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 30%,
-    rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.3));
+  background: linear-gradient(170deg,
+    rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 28%,
+    rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0.1));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
 }
@@ -91,14 +93,13 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
   border-radius: 50%;
   display: grid; place-items: center;
   position: relative;
-  background: rgba(0, 0, 0, 0.2);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.07);
   transition: --p 1s;
 }
 .ring::before {
   content: ""; position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgba(255, 255, 255, 0.2) 0);
-  -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 82%);
+  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgba(255, 255, 255, 0.16) 0);
+  -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 86%);
 }
 .ring.low { --ring-color: #ff453a; }
 .ring.unknown { --ring-color: rgba(255, 255, 255, 0.45); }
