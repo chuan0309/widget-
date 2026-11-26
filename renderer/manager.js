@@ -34,7 +34,7 @@ function go(section) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.go === section));
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.dataset.section === section));
   if (section === "pinterest") loadPinterest();
-  if (section === "calendar") { renderCalendars(); loadGoogle(); }
+  if (section === "calendar") loadGoogle();
   if (section === "audio") loadAudio();
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
@@ -419,8 +419,7 @@ async function loadGoogle() {
   if (!st.configured) {
     box.innerHTML = `<div class="row"><span class="row-icon">${icon("calendar")}</span>
       <span class="row-text"><b>這個版本還不能用 Google 帳號登入</b>
-      <small>開發者還沒設定 Google 登入（README 裡有步驟）。現在可以先用下面「進階」的 iCal 網址。</small></span></div>`;
-    $("calAdv").open = true;
+      <small>開發者還沒設定 Google 登入（README 裡有步驟）。</small></span></div>`;
     return;
   }
   if (!st.loggedIn) {
@@ -468,44 +467,6 @@ async function loadGoogle() {
     return row;
   }));
 }
-
-/* ───────── Google 日曆：進階（iCal 網址） ───────── */
-function renderCalendars() {
-  const list = state.calendars || [];
-  if (list.length === 0) {
-    $("calList").innerHTML = `<div class="row"><span class="row-icon">${icon("calendar")}</span>
-      <span class="row-text"><b>沒有用 iCal 網址加入的行事曆</b><small>登入 Google 帳號的話不需要這個</small></span></div>`;
-    return;
-  }
-  $("calList").replaceChildren(...list.map((c, i) => {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = `<span class="dot" style="background:${c.color}"></span>
-      <span class="row-text"><b>${escapeHTML(c.name)}</b></span>
-      <button class="btn small ghost">${icon("delete")}移除</button>`;
-    row.querySelector("button").addEventListener("click", async () => {
-      await window.api.calRemove(i);
-      state = await window.api.mgrGet();
-      renderCalendars();
-      toast("已移除");
-    });
-    return row;
-  }));
-}
-$("calAdd").addEventListener("click", async () => {
-  $("calErr").textContent = "";
-  $("calAdd").disabled = true;
-  $("calAdd").textContent = "讀取中…";
-  const res = await window.api.calAdd($("calUrl").value);
-  $("calAdd").disabled = false;
-  $("calAdd").textContent = "加入";
-  if (res.error) { $("calErr").textContent = res.error; return; }
-  $("calUrl").value = "";
-  state = await window.api.mgrGet();
-  renderCalendars();
-  toast(`已加入「${res.name || "行事曆"}」`);
-});
-$("calOpenGoogle").addEventListener("click", () => window.api.mgrOpenUrl("https://calendar.google.com/calendar/r/settings"));
 
 /* ───────── 天氣 ───────── */
 function renderCity() {
@@ -569,11 +530,17 @@ $("locateNow").addEventListener("click", async () => {
 function renderGeneral() {
   $("autostart").checked = state.autostart;
   $("desktopLayer").checked = state.desktopLayer;
+  $("gameMode").value = state.settings.gameMode || "game";
+  $("gameMsg").textContent = state.gaming
+    ? "現在是遊戲模式：小組件暫停中，遊戲關掉後會自動回來"
+    : "玩遊戲時把小組件、通知、背景小幫手全部關掉，省下大部分記憶體；玩完自動開回來";
   $("dataFolder").textContent = state.dataFolder;
   $("version").textContent = state.version;
 }
 $("autostart").addEventListener("change", (e) =>
   save({ autostart: e.target.checked }, e.target.checked ? "開機時會自動啟動" : "已關閉自動啟動"));
+$("gameMode").addEventListener("change", (e) =>
+  save({ gameMode: e.target.value }, { game: "玩 Steam 遊戲時自動進入遊戲模式", steam: "Steam 開著就進入遊戲模式", off: "不使用遊戲模式" }[e.target.value]));
 $("desktopLayer").addEventListener("change", (e) =>
   save({ desktopLayer: e.target.checked }, e.target.checked ? "小組件放回桌面那一層" : "小組件不再固定在桌面那一層"));
 $("openFolder").addEventListener("click", () => window.api.mgrOpenFolder());
@@ -614,7 +581,6 @@ function render() {
   renderBluetooth();
   renderCity();
   renderGeneral();
-  renderCalendars();
   renderWeatherSource();
   renderPinInterval();
   renderWorldClocks();
@@ -666,35 +632,6 @@ $("cwaForm").addEventListener("submit", async (e) => {
 /* ───────── Pinterest 換圖間隔（10～120 分鐘） ───────── */
 function renderPinInterval() { $("pnInterval").value = String(state.settings.pinInterval || 30); }
 $("pnInterval").addEventListener("change", (e) => save({ pinInterval: Number(e.target.value) }, "已套用"));
-
-/* ───────── Pinterest 首頁推薦（讀網頁版首頁） ───────── */
-async function renderPinHome() {
-  const st = await window.api.pinHomeStatus();
-  $("pnHomeLogin").hidden = st.loggedIn;
-  $("pnHomeOn").hidden = !st.loggedIn;
-  $("pnHomeOn").checked = st.on;
-  $("pnHomeMore").hidden = !st.loggedIn;
-  $("pnHomeMsg").textContent = !st.loggedIn
-    ? "在程式的視窗裡登入一次 pinterest.com，之後會定時讀你的首頁"
-    : st.on ? "開著：小組件會隨機播放你首頁推薦的圖（大約每小時讀一次首頁）" : "已登入，打開開關就會用首頁推薦";
-}
-$("pnHomeLogin").addEventListener("click", async () => {
-  $("pnHomeMsg").textContent = "請在跳出來的視窗登入 Pinterest，登入好會自己關掉…";
-  const r = await window.api.pinHomeLogin();
-  toast(r.ok ? "已開啟首頁推薦" : "沒有登入");
-  renderPinHome();
-});
-$("pnHomeOn").addEventListener("change", async (e) => {
-  await window.api.pinHomeSet(e.target.checked);
-  toast(e.target.checked ? "改用首頁推薦" : "改用圖版");
-  renderPinHome();
-});
-$("pnHomeLogout").addEventListener("click", async () => {
-  await window.api.pinHomeLogout();
-  toast("已登出網頁");
-  renderPinHome();
-});
-renderPinHome();
 
 /* ───────── 世界時鐘的 4 個城市 ───────── */
 const WORLD_CITIES = [

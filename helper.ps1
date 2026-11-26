@@ -2,7 +2,7 @@
 # needs Windows APIs (one process instead of four saves a lot of memory).
 #
 # Prints lines "<kind> <json>" whenever something changes:
-#   bt     Bluetooth devices: [{id, name, connected, battery, cod, le}]   (every 4 s)
+#   bt     Bluetooth devices: [{id, name, connected, battery, cod, le}]   (every 8 s)
 #   audio  playback devices: [{id, name, default}]                        (every 2 s)
 # Reads commands from stdin:
 #   pin <hwnd>         keep a window on the desktop layer
@@ -252,7 +252,7 @@ $KEY_CONNECTED = '{83DA6326-97A6-4088-9453-A1923F573B29} 15'
 $KEY_BATTERY   = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $KEY_COD       = '{2BD67D8B-8BEB-48D5-87E0-6CDA3428040A} 10'   # Bluetooth Class of Device
 
-$POLL_SECONDS = 4
+$POLL_SECONDS = 8   # 4 → 8 s: the PnP query is the heaviest thing the helper does
 $USB_HEADSETS = @('INZONE')   # name keywords of headsets that use their own USB receiver
 $GATT_EVERY_SECONDS = 120
 

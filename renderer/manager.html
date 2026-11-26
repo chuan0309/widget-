@@ -168,20 +168,6 @@
         <div class="group" id="gCals"></div>
       </div>
 
-      <details class="adv" id="calAdv">
-        <summary>進階：用 iCal 網址加入（不用登入）</summary>
-        <h2>已加入的 iCal 行事曆</h2>
-        <div class="group" id="calList"></div>
-        <div class="group" style="margin-top:12px">
-          <div class="row">
-            <input class="grow" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" spellcheck="false" />
-            <button class="btn small" id="calAdd">加入</button>
-          </div>
-        </div>
-        <p class="hint err" id="calErr"></p>
-        <p class="hint">網址在 Google 日曆網頁版 → 日曆的「設定和共用」→「整合日曆」→「iCal 格式的私人網址」。
-          <button class="link" id="calOpenGoogle">打開 Google 日曆設定</button></p>
-      </details>
     </section>
 
     <!-- Pinterest -->
@@ -195,20 +181,6 @@
         <div class="row">
           <span class="row-text"><b>用你的 Pinterest 帳號登入</b><small id="pnQuickErr">會打開瀏覽器，按「允許」就完成</small></span>
           <button class="btn signin pinterest" id="pnQuickLogin"><span data-icon="pin"></span>使用 Pinterest 帳號登入</button>
-        </div>
-      </div>
-
-      <h2>首頁推薦（依你的興趣）</h2>
-      <div class="group">
-        <div class="row">
-          <span class="row-icon" data-icon="pin"></span>
-          <span class="row-text"><b id="pnHomeTitle">隨機播放你 Pinterest 首頁推薦的圖</b><small id="pnHomeMsg">在程式的視窗裡登入一次 pinterest.com，之後會定時讀你的首頁</small></span>
-          <button class="btn small" id="pnHomeLogin"><span data-icon="login"></span>用網頁登入</button>
-          <input type="checkbox" class="switch" id="pnHomeOn" hidden />
-        </div>
-        <div class="row" id="pnHomeMore" hidden>
-          <span class="row-text"><small>這是讀網頁版 Pinterest，不是官方 API；Pinterest 改版的話可能要更新程式。關掉時會改用下面選的圖版。</small></span>
-          <button class="btn small ghost" id="pnHomeLogout"><span data-icon="logout"></span>登出網頁</button>
         </div>
       </div>
 
@@ -335,6 +307,14 @@
           <span class="row-text"><b>放在桌面那一層</b><small>開著：其他視窗永遠蓋在小組件上面。小組件不見的話可以試著關掉</small></span>
           <input type="checkbox" class="switch" id="desktopLayer" />
         </label>
+        <div class="row">
+          <span class="row-text"><b>遊戲模式</b><small id="gameMsg">玩遊戲時把小組件、通知、背景小幫手全部關掉，省下大部分記憶體；玩完自動開回來</small></span>
+          <select id="gameMode" class="select">
+            <option value="game">玩 Steam 遊戲時</option>
+            <option value="steam">Steam 開著時</option>
+            <option value="off">不使用</option>
+          </select>
+        </div>
         <div class="row">
           <span class="row-text"><b>設定資料夾</b><small id="dataFolder"></small></span>
           <button class="btn small ghost" id="openFolder"><span data-icon="folder_open"></span>打開</button>

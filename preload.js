@@ -24,8 +24,6 @@ contextBridge.exposeInMainWorld("api", {
   googleLogout: () => ipcRenderer.invoke("google:logout"),
   googleCalendars: () => ipcRenderer.invoke("google:calendars"),
   googleChoose: (id, on) => ipcRenderer.invoke("google:choose", id, on),
-  calAdd: (url) => ipcRenderer.invoke("cal:add", url),
-  calRemove: (i) => ipcRenderer.invoke("cal:remove", i),
   calRefresh: () => ipcRenderer.invoke("cal:refresh"),
   onCalUpdate: (cb) => ipcRenderer.on("cal:update", (_e, d) => cb(d)),
   onMgrRefresh: (cb) => ipcRenderer.on("mgr:refresh", () => cb()),
@@ -67,8 +65,4 @@ contextBridge.exposeInMainWorld("api", {
   pinterestBoards: () => ipcRenderer.invoke("pins:boards"),
   pinterestChoose: (source) => ipcRenderer.invoke("pins:choose", source),
   pinterestLogout: () => ipcRenderer.send("pins:logout"),
-  pinHomeStatus: () => ipcRenderer.invoke("pins:home-status"),
-  pinHomeLogin: () => ipcRenderer.invoke("pins:home-login"),
-  pinHomeSet: (on) => ipcRenderer.invoke("pins:home-set", on),
-  pinHomeLogout: () => ipcRenderer.invoke("pins:home-logout"),
 });

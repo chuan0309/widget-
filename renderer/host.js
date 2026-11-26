@@ -836,7 +836,11 @@ WIDGETS.pinterest = {
   show(cell, p, inst, tries = 0) {
     const layers = cell.querySelectorAll(".pn-photo");
     const back = [...layers].find((l) => !l.classList.contains("on")) || layers[0];
-    const urls = [p.img, p.orig].filter((u, i, a) => u && a.indexOf(u) === i);
+    // 省記憶體：格子很小，不用載 600～736 寬的大圖（大圖解碼後一張就好幾 MB）。
+    // 中、大的格子用 236 寬，小的用 474 寬；載不到再退回原本的網址
+    const want = inst?.size === "s" ? "474x" : "236x";
+    const sized = /^https:\/\/i\.pinimg\.com\//.test(p.img || "") ? p.img.replace(/\/(\d+x\d*|originals)\//, `/${want}/`).replace(/\.(png|gif|webp)$/i, ".jpg") : "";
+    const urls = [sized, p.img, p.orig].filter((u, i, a) => u && a.indexOf(u) === i);
     const attempt = (k) => {
       const img = new Image();
       img.onload = () => {

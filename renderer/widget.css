@@ -108,6 +108,9 @@
   height: 30px; font-size: 14px; font-weight: 600;
 }
 .wt-day + .wt-day { border-top: 0.5px solid rgb(var(--fg) / 0.18); }
+/* 大：5 天平均撐滿下面的空間，底下不會留一大塊空白 */
+.size-l .wt-days { flex: 1; min-height: 0; }
+.size-l .wt-day { flex: 1; height: auto; min-height: 26px; }
 .wt-dicon { display: flex; align-items: center; gap: 1px; line-height: 1; }
 .wt-day svg { width: 24px; height: 24px; flex-shrink: 0; }
 .wt-rain { font-size: 11px; font-weight: 700; color: #64d2ff; }

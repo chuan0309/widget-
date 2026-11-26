@@ -20,7 +20,6 @@
       "main.js",
       "preload.js",
       "pinterest-api.js",
-      "pinterest-home.js",
       "wallpaper.js",
       "calendar.js",
       "google.js",
@@ -62,7 +61,6 @@
   },
   "author": "Chuan",
   "dependencies": {
-    "electron-updater": "6.8.11",
-    "ical.js": "2.2.1"
+    "electron-updater": "6.8.11"
   }
 }
