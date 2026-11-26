@@ -288,3 +288,11 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .size-m .au-ico { width: 28px; height: 28px; }
 .size-m .au-ico svg { width: 16px; height: 16px; }
 
+
+/* ───────── 字體統一（像 Apple）─────────
+   規則：大數字（溫度、時間、AQI、日期）用細字；其他所有字一律粗體；
+   次要的字也是粗體，只是改成灰色（用顏色分主次，不用粗細） */
+.pane { font-weight: 600; }
+.pane :is(small, span, div, p, b, i, strong) { font-weight: inherit; }
+.pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p) { font-weight: 700; }
+.pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 300; }
