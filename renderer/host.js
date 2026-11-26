@@ -423,13 +423,16 @@ const ringHTML = (it) => {
   return `<div class="ring ${state}" style="--p:${it.battery ?? 100}">${deviceIcon(it.type)}</div>`;
 };
 
+// 一頁放幾台：中 4 台；大的照實際放得下的數量（最多 6 台）
+const battPer = (inst) => inst.size === "l" ? (inst.battFit || 6) : 4;
+
 WIDGETS.battery = {
   mount(pane, inst) {
     inst.battPage = 0;
     // 裝置太多時每 6 秒翻頁（滑鼠在上面時不翻）
     inst.timers.push(setInterval(() => {
       if (paused || inst.el.matches(":hover")) return;
-      const per = inst.size === "l" ? 5 : 4;
+      const per = battPer(inst);
       const pages = Math.ceil(batteryList().length / per);
       if (pages > 1) { inst.battPage = (inst.battPage + 1) % pages; WIDGETS.battery.render(pane, inst); }
     }, 6000));
@@ -440,7 +443,8 @@ WIDGETS.battery = {
       setHTML(pane, `<div class="setup-msg"><span class="ring unknown" style="--p:0;--size:46px">${icon("other")}</span><small>沒有連線中的藍牙裝置</small></div>`);
       return;
     }
-    const per = inst.size === "l" ? 5 : 4;
+    if (inst.battLen !== list.length) { inst.battLen = list.length; inst.battFit = 0; }
+    const per = battPer(inst);
     const pages = Math.ceil(list.length / per);
     if (inst.battPage >= pages) inst.battPage = 0;
     const show = list.slice(inst.battPage * per, (inst.battPage + 1) * per);
@@ -453,6 +457,12 @@ WIDGETS.battery = {
           <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
     setHTML(pane, `<div class="batt">${body}</div>${dots}`);
+    // 大尺寸：先試一頁放 6 台，名字太長換行放不下時才少放一台
+    const box = pane.firstElementChild;
+    if (inst.size === "l" && box.scrollHeight > box.clientHeight + 1 && per > 3) {
+      inst.battFit = per - 1;
+      WIDGETS.battery.render(pane, inst);
+    }
   },
 };
 
