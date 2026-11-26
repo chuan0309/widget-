@@ -6,4 +6,8 @@ contextBridge.exposeInMainWorld("api", {
   onDevices: (cb) => ipcRenderer.on("devices", (_e, list) => cb(list)),
   onPopupDevice: (cb) => ipcRenderer.on("popup:device", (_e, d) => cb(d)),
   closePopup: () => ipcRenderer.send("popup:close"),
+  getPins: () => ipcRenderer.invoke("pins:get"),
+  setPinterest: (url) => ipcRenderer.invoke("pins:set", url),
+  resetPinterest: () => ipcRenderer.send("pins:reset"),
+  openPin: (link) => ipcRenderer.send("open-pin", link),
 });

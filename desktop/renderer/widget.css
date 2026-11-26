@@ -44,3 +44,91 @@
 }
 .batt-item.placeholder { opacity: 0.4; }
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+
+/* Pinterest */
+.pinterest { display: flex; flex-direction: column; }
+.pn-head {
+  height: 46px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 10px 0 14px;
+  font-size: 14px;
+}
+.pn-head b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pn-badge {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: #e60023;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+.pn-badge svg, .pn-gear svg {
+  width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+.pn-gear {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  opacity: 0; transition: opacity 0.2s;
+}
+.pinterest:hover .pn-gear, .pinterest.setup .pn-gear { opacity: 1; }
+
+/* 瀑布流：兩欄各自用不同速度往上捲，看起來像在滑 Pinterest */
+.pn-wall {
+  flex: 1; min-height: 0;
+  display: flex; gap: 8px;
+  padding: 0 10px;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(transparent, #000 14px, #000 calc(100% - 26px), transparent);
+}
+.pn-col {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  animation: pn-scroll var(--dur, 60s) linear infinite;
+}
+.pn-wall:hover .pn-col { animation-play-state: paused; }
+@keyframes pn-scroll { to { transform: translateY(calc(-50% - 4px)); } }
+.pn-pin {
+  display: block; width: 100%;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.5s, transform 0.25s var(--ease-spring), filter 0.2s;
+  -webkit-app-region: no-drag;
+}
+.pn-pin.loaded { opacity: 1; }
+.pn-pin:hover { transform: scale(1.03); filter: brightness(1.08); }
+
+.pinterest.setup .pn-wall { filter: blur(8px); opacity: 0.4; }
+.pn-setup {
+  position: absolute; left: 0; right: 0; top: 46px; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 0 26px 20px; text-align: center;
+}
+.pn-setup p { font-size: 17px; font-weight: 700; }
+.pn-setup small { font-size: 12px; color: var(--ink-soft); margin-bottom: 10px; }
+.pn-setup input {
+  width: 100%; height: 40px; border-radius: 20px; border: 0; outline: 0;
+  padding: 0 16px;
+  font: inherit; font-size: 13px; color: #fff;
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.18);
+  -webkit-app-region: no-drag;
+  user-select: text;
+}
+.pn-setup input::placeholder { color: rgba(255, 255, 255, 0.45); }
+.pn-setup input:focus { box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--accent); }
+.pn-error { min-height: 16px; font-size: 12px; color: #ff6961; }
+.pn-setup button[type="submit"] {
+  width: 100%; height: 40px; border-radius: 20px;
+  background: var(--accent); font-weight: 600; font-size: 14px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+.pn-setup button[disabled] { opacity: 0.6; }
+.pn-msg {
+  position: absolute; left: 20px; right: 20px; bottom: 18px;
+  padding: 8px 12px; border-radius: 14px;
+  font-size: 12px; text-align: center;
+  background: rgba(0, 0, 0, 0.35);
+}

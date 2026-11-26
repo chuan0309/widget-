@@ -109,3 +109,74 @@ async function initBattery() {
   window.api.onDevices((list) => { btDevices = list; renderBattery(); });
 }
 if (kind === "battery") initBattery();
+
+/* ───────── Pinterest ───────── */
+const pnCard = document.querySelector(".pinterest");
+let hasPins = false;
+
+function pinElement(pin) {
+  const img = document.createElement("img");
+  img.className = "pn-pin";
+  img.src = pin.img;
+  img.alt = pin.title || "";
+  img.title = pin.title || "";
+  img.draggable = false;
+  img.addEventListener("load", () => img.classList.add("loaded"));
+  img.addEventListener("click", () => window.api.openPin(pin.link));
+  return img;
+}
+
+function renderPins({ title, pins }) {
+  $("pnTitle").textContent = title;
+  const cols = [[], []];
+  pins.forEach((p, i) => cols[i % 2].push(p));
+  [$("pnColA"), $("pnColB")].forEach((col, i) => {
+    col.replaceChildren();
+    // 同一組放兩次，捲到一半時剛好接回開頭，看起來就是無限捲動
+    for (let round = 0; round < 2; round++) cols[i].forEach((p) => col.append(pinElement(p)));
+    col.style.setProperty("--dur", `${Math.max(20, cols[i].length * (i ? 9 : 7))}s`);
+  });
+  hasPins = true;
+}
+
+function showSetup(error = "") {
+  pnCard.classList.add("setup");
+  $("pnSetup").hidden = false;
+  $("pnError").textContent = error;
+  $("pnInput").focus();
+}
+function hideSetup() {
+  pnCard.classList.remove("setup");
+  $("pnSetup").hidden = true;
+}
+function showMsg(text) {
+  $("pnMsg").textContent = text;
+  $("pnMsg").hidden = !text;
+}
+
+function applyPins(result) {
+  if (result.needSetup) return showSetup(result.error);
+  hideSetup();
+  if (result.pins) { renderPins(result); showMsg(""); }
+  else if (result.error) { if (result.title) $("pnTitle").textContent = result.title; showMsg(result.error); }
+}
+
+async function initPinterest() {
+  applyPins(await window.api.getPins());
+  setInterval(async () => { if (!pnCard.classList.contains("setup")) applyPins(await window.api.getPins()); }, 30 * 60 * 1000);
+
+  $("pnSetup").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("pnSave").disabled = true;
+    $("pnSave").textContent = "讀取中…";
+    const result = await window.api.setPinterest($("pnInput").value);
+    $("pnSave").disabled = false;
+    $("pnSave").textContent = "完成";
+    applyPins(result);
+  });
+  $("pnGear").addEventListener("click", () => {
+    if (pnCard.classList.contains("setup") && hasPins) hideSetup();
+    else showSetup();
+  });
+}
+if (kind === "pinterest") initPinterest();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com" />
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com; img-src 'self' https://i.pinimg.com" />
   <title>Glass Widget</title>
   <link rel="stylesheet" href="glass.css" />
   <link rel="stylesheet" href="widget.css" />
@@ -31,6 +31,32 @@
   <!-- 電量：電腦 + 已連線的藍牙裝置 -->
   <div class="card battery" data-kind="battery" hidden>
     <div class="batt-row" id="battRow"></div>
+  </div>
+
+  <!-- Pinterest -->
+  <div class="card pinterest" data-kind="pinterest" hidden>
+    <header class="pn-head">
+      <span class="pn-badge"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7"/></svg></span>
+      <b id="pnTitle">Pinterest</b>
+      <button class="pn-gear" id="pnGear" aria-label="換圖版" title="換圖版">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>
+      </button>
+    </header>
+
+    <div class="pn-wall" id="pnWall">
+      <div class="pn-col" id="pnColA"></div>
+      <div class="pn-col" id="pnColB"></div>
+    </div>
+
+    <form class="pn-setup" id="pnSetup" hidden>
+      <p>貼上你的 Pinterest 網址</p>
+      <small>個人頁或某個圖版都可以</small>
+      <input id="pnInput" placeholder="pinterest.com/帳號/圖版" spellcheck="false" />
+      <span class="pn-error" id="pnError"></span>
+      <button type="submit" id="pnSave">完成</button>
+    </form>
+
+    <div class="pn-msg" id="pnMsg" hidden></div>
   </div>
 
   <script src="devices.js"></script>

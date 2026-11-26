@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -7,14 +7,19 @@ const fs = require("fs");
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 const DEFAULTS = {
   glass: "acrylic", // "acrylic" = Windows 11 毛玻璃；"transparent" = 透明圓角（不模糊）
-  widgets: { clock: true, weather: true, battery: true },
+  widgets: { clock: true, weather: true, battery: true, pinterest: true },
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
+  pinterest: { feed: "" }, // 例如 https://www.pinterest.com/帳號/圖版.rss
 };
 function loadSettings() {
   try {
     const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
-    return { ...DEFAULTS, ...saved, widgets: { ...DEFAULTS.widgets, ...saved.widgets } };
+    return {
+      ...DEFAULTS, ...saved,
+      widgets: { ...DEFAULTS.widgets, ...saved.widgets },
+      pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
+    };
   } catch {
     return structuredClone(DEFAULTS);
   }
@@ -30,6 +35,7 @@ const WIDGETS = {
   clock: { width: 170, height: 170 },
   weather: { width: 170, height: 170 },
   battery: { width: 356, height: 170 },
+  pinterest: { width: 356, height: 356 },
 };
 const widgetWins = {};
 
@@ -39,6 +45,7 @@ function defaultPosition(kind) {
   const top = wa.y + 24;
   if (kind === "battery") return { x: right - 356, y: top };
   if (kind === "clock") return { x: right - 356, y: top + 186 };
+  if (kind === "pinterest") return { x: right - 356, y: top + 372 };
   return { x: right - 170, y: top + 186 };
 }
 
@@ -219,6 +226,7 @@ function buildTrayMenu() {
     { label: "時鐘", type: "checkbox", checked: settings.widgets.clock, click: toggleWidget("clock") },
     { label: "天氣", type: "checkbox", checked: settings.widgets.weather, click: toggleWidget("weather") },
     { label: "電量", type: "checkbox", checked: settings.widgets.battery, click: toggleWidget("battery") },
+    { label: "Pinterest", type: "checkbox", checked: settings.widgets.pinterest, click: toggleWidget("pinterest") },
     { type: "separator" },
     { label: "玻璃效果：毛玻璃（Win11）", type: "radio", checked: settings.glass === "acrylic", click: setGlass("acrylic") },
     { label: "玻璃效果：透明圓角", type: "radio", checked: settings.glass === "transparent", click: setGlass("transparent") },
@@ -233,6 +241,83 @@ function buildTrayMenu() {
     { label: "離開", click: () => app.quit() },
   ]));
 }
+
+/* ───────── Pinterest（讀公開的 RSS，不用登入也不用 API 金鑰）───────── */
+// 把使用者貼的網址轉成 RSS 網址：
+//   pinterest.com/帳號/        → pinterest.com/帳號/feed.rss（最新的 pin）
+//   pinterest.com/帳號/圖版/   → pinterest.com/帳號/圖版.rss
+function pinterestFeedFrom(input) {
+  let text = String(input || "").trim();
+  if (!text) return null;
+  if (!/^https?:\/\//i.test(text)) {
+    if (/^[\w.-]+(\/[\w.%-]+)?\/?$/.test(text)) text = `https://www.pinterest.com/${text}`;
+    else return null;
+  }
+  let url;
+  try { url = new URL(text); } catch { return null; }
+  if (!/(^|\.)pinterest\.[a-z.]+$/i.test(url.hostname)) return null;
+  const parts = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  if (parts.length === 0 || parts[0] === "pin") return null;
+  const enc = parts.map(encodeURIComponent);
+  if (parts[parts.length - 1].endsWith(".rss")) return `https://www.pinterest.com/${enc.join("/")}`;
+  if (parts.length === 1) return `https://www.pinterest.com/${enc[0]}/feed.rss`;
+  return `https://www.pinterest.com/${enc[0]}/${enc[1]}.rss`;
+}
+
+const decodeXML = (s = "") => s
+  .replace(/^<!\[CDATA\[|\]\]>$/g, "")
+  .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+  .replace(/&amp;/g, "&");
+
+async function fetchPins() {
+  const feed = settings.pinterest.feed;
+  if (!feed) return { needSetup: true };
+  try {
+    const res = await net.fetch(feed, { headers: { "User-Agent": "Mozilla/5.0 GlassWidgets" } });
+    if (res.status === 404) return { error: "找不到這個帳號或圖版，網址對嗎？", feed };
+    if (!res.ok) return { error: `Pinterest 回應錯誤（${res.status}）`, feed };
+    const xml = await res.text();
+    const title = decodeXML(xml.match(/<channel>\s*<title>([\s\S]*?)<\/title>/)?.[1]?.trim()) || "Pinterest";
+    const pins = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, item]) => {
+      const desc = decodeXML(item.match(/<description>([\s\S]*?)<\/description>/)?.[1]);
+      const img = desc.match(/<img[^>]+src="([^"]+)"/)?.[1];
+      return {
+        img: img?.replace(/\/\d+x\//, "/474x/"), // RSS 給的是小圖，換成清楚一點的
+        link: item.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim(),
+        title: decodeXML(item.match(/<title>([\s\S]*?)<\/title>/)?.[1]).trim().slice(0, 120),
+      };
+    }).filter((p) => p.img && /^https:\/\/i\.pinimg\.com\//.test(p.img));
+    if (pins.length === 0) return { error: "這裡面還沒有 pin，或是不公開", feed, title };
+    return { feed, title, pins };
+  } catch {
+    return { error: "連不到 Pinterest，等一下會再試", feed };
+  }
+}
+
+ipcMain.handle("pins:get", fetchPins);
+ipcMain.handle("pins:set", async (_e, input) => {
+  const feed = pinterestFeedFrom(input);
+  if (!feed) return { needSetup: true, error: "請貼 Pinterest 的個人頁或圖版網址" };
+  const prev = settings.pinterest.feed;
+  settings.pinterest.feed = feed;
+  const result = await fetchPins();
+  if (result.error) settings.pinterest.feed = prev; // 抓不到就不要存
+  else saveSettings();
+  return result.error ? { ...result, needSetup: true } : result;
+});
+ipcMain.on("pins:reset", () => {
+  settings.pinterest.feed = "";
+  saveSettings();
+});
+ipcMain.on("open-pin", (_e, link) => {
+  // 只開 Pinterest 自己的網址
+  try {
+    const u = new URL(link);
+    if (u.protocol === "https:" && /(^|\.)pinterest\.[a-z.]+$/i.test(u.hostname)) shell.openExternal(u.href);
+  } catch {}
+});
 
 /* ───────── IPC ───────── */
 ipcMain.handle("get-state", () => ({ devices, city: settings.city }));
