@@ -2,34 +2,45 @@
 
 /* ───────── 時鐘 ───────── */
 .clock { display: flex; align-items: center; justify-content: center; gap: 8px; }
-/* 像 Apple 的「時鐘 I」：白色圓形錶面、黑色數字和指針、橘色秒針 */
+/* 像 iPhone 的「時鐘」小組件：白色錶面幾乎填滿、60 格細刻度＋粗的整點刻度、
+   粗體數字在刻度內側、Apple 造型的指針（靠中心一小段是細的）、橘色秒針 */
 .analog {
-  --d: 140px;
+  --d: 150px;
   position: relative; flex-shrink: 0;
   width: var(--d); height: var(--d);
   border-radius: 50%;
   background: #fff; color: #000;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
-.analog::before { /* 60 格刻度，整點的比較粗 */
-  content: ""; position: absolute; inset: 3.5%; border-radius: 50%;
-  background:
-    repeating-conic-gradient(from -0.7deg, rgba(0, 0, 0, 0.8) 0 1.4deg, transparent 1.4deg 30deg),
-    repeating-conic-gradient(from -0.3deg, rgba(0, 0, 0, 0.35) 0 0.6deg, transparent 0.6deg 6deg);
-  -webkit-mask: radial-gradient(circle, transparent 90%, #000 91%);
+.analog::before { /* 60 格小刻度（灰、短） */
+  content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+  background: repeating-conic-gradient(from -0.35deg, rgba(0, 0, 0, 0.45) 0 0.7deg, transparent 0.7deg 6deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 92%, #000 92.5%);
+}
+.analog::after { /* 整點刻度（黑、比較長、比較粗） */
+  content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+  background: repeating-conic-gradient(from -0.9deg, #000 0 1.8deg, transparent 1.8deg 30deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 85%, #000 85.5%);
 }
 .num {
   position: absolute; left: 50%; top: 50%;
   font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  font-size: calc(var(--d) * 0.115); font-weight: 600; line-height: 1; color: #000;
-  translate: -50% -50%;
+  font-size: calc(var(--d) * 0.125); font-weight: 600; line-height: 1; color: #000;
+  translate: -50% -50%; z-index: 1;
 }
-.hand { position: absolute; left: 50%; bottom: 50%; transform-origin: 50% 100%; border-radius: 4px; background: #1c1c1e; }
-.hand.h { width: calc(var(--d) * 0.045); height: 25%; translate: -50% 0; }
-.hand.m { width: calc(var(--d) * 0.035); height: 37%; translate: -50% 0; }
-.hand.s { width: 1.5px; height: 42%; translate: -50% 0; background: #ff9500; }
-.hand.s::after { content: ""; position: absolute; left: 50%; bottom: -16%; width: 100%; height: 16%; translate: -50% 0; background: inherit; }
-.pin { position: absolute; width: 5%; height: 5%; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #ff9500; }
+/* 時針、分針：靠中心一小段細細的，後面才變粗（Apple 的樣子） */
+.hand { position: absolute; left: 50%; bottom: 50%; transform-origin: 50% 100%; z-index: 2; }
+.hand.h::before, .hand.m::before { /* 粗的部分 */
+  content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 20%; border-radius: 99px; background: #1c1c1e;
+}
+.hand.h::after, .hand.m::after { /* 靠中心的細段 */
+  content: ""; position: absolute; left: 36%; right: 36%; bottom: 0; height: 24%; background: #1c1c1e;
+}
+.hand.h { width: calc(var(--d) * 0.042); height: 27%; translate: -50% 0; }
+.hand.m { width: calc(var(--d) * 0.034); height: 40%; translate: -50% 0; }
+.hand.s { width: 1.4px; height: 43%; translate: -50% 0; background: #ff9500; z-index: 3; }
+.hand.s::after { content: ""; position: absolute; left: 50%; bottom: -18%; width: 100%; height: 18%; translate: -50% 0; background: inherit; }
+.pin { position: absolute; z-index: 4; width: 5.5%; height: 5.5%; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #ff9500; }
 .clock-info { display: flex; flex-direction: column; }
 .digital { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .clock-meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--ink-soft); }
@@ -41,7 +52,7 @@
 .size-s .clock-meta { display: none; }
 .size-s .digital, .size-s .clock-date, .size-s .lunar { display: none; }
 .size-m .clock { gap: 22px; }
-.size-m .analog { --d: 142px; }
+.size-m .analog { --d: 146px; }
 .size-m .clock-meta, .size-l .clock-meta { display: none; }
 .size-l .clock { flex-direction: column; gap: 14px; }
 .size-l .analog { --d: 240px; }

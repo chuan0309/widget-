@@ -335,7 +335,7 @@ WIDGETS.clock = {
     pane.innerHTML = `
       <div class="analog">${Array.from({ length: 12 }, (_, i) => {
         const a = ((i + 1) * 30 - 90) * Math.PI / 180;
-        return `<span class="num" style="left:${50 + 36 * Math.cos(a)}%;top:${50 + 36 * Math.sin(a)}%">${i + 1}</span>`;
+        return `<span class="num" style="left:${50 + 33.5 * Math.cos(a)}%;top:${50 + 33.5 * Math.sin(a)}%">${i + 1}</span>`;
       }).join("")}<i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>
       <div class="clock-info"><div class="digital"></div>
         <div class="clock-meta"><span class="cm-week"></span><b class="cm-day"></b></div>
