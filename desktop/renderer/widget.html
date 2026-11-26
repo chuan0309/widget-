@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com" />
+  <title>Glass Widget</title>
+  <link rel="stylesheet" href="glass.css" />
+  <link rel="stylesheet" href="widget.css" />
+</head>
+<body>
+  <!-- 時鐘 -->
+  <div class="card clock" data-kind="clock" hidden>
+    <div class="analog">
+      <i class="hand h" id="hHand"></i>
+      <i class="hand m" id="mHand"></i>
+      <i class="hand s" id="sHand"></i>
+      <i class="pin"></i>
+    </div>
+    <div class="clock-meta"><span id="dateWeek"></span><b id="dateDay"></b></div>
+  </div>
+
+  <!-- 天氣 -->
+  <div class="card weather" data-kind="weather" hidden>
+    <div class="wt-city" id="wtCity"></div>
+    <div class="wt-temp" id="wtTemp">--°</div>
+    <div class="wt-icon" id="wtIcon"></div>
+    <div class="wt-desc"><span id="wtDesc">讀取中…</span><small id="wtRange"></small></div>
+  </div>
+
+  <!-- 電量：電腦 + 已連線的藍牙裝置 -->
+  <div class="card battery" data-kind="battery" hidden>
+    <div class="batt-row" id="battRow"></div>
+  </div>
+
+  <script src="devices.js"></script>
+  <script src="widget.js"></script>
+</body>
+</html>

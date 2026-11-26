@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>藍牙通知</title>
+  <link rel="stylesheet" href="glass.css" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="card sheet">
+    <button class="close" id="closeBtn" aria-label="關閉">✕</button>
+    <h1 id="name">藍牙裝置</h1>
+    <p class="sub">已連線</p>
+
+    <div class="art" id="art"></div>
+
+    <div class="batt" id="batt"></div>
+
+    <button class="done" id="doneBtn">完成</button>
+  </div>
+
+  <script src="devices.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

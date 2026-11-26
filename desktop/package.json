@@ -1,0 +1,30 @@
+{
+  "name": "glass-widgets",
+  "productName": "Glass Widgets",
+  "version": "1.0.0",
+  "description": "Windows 11 桌面玻璃小組件 + 藍牙連線通知",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "local.glasswidgets.app",
+    "productName": "Glass Widgets",
+    "files": ["main.js", "preload.js", "bt-watch.ps1", "renderer/**", "assets/**"],
+    "asarUnpack": ["bt-watch.ps1"],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
