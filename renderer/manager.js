@@ -647,3 +647,32 @@ $("cwaForm").addEventListener("submit", async (e) => {
 /* ───────── Pinterest 換圖間隔（10～120 分鐘） ───────── */
 function renderPinInterval() { $("pnInterval").value = String(state.settings.pinInterval || 30); }
 $("pnInterval").addEventListener("change", (e) => save({ pinInterval: Number(e.target.value) }, "已套用"));
+
+/* ───────── Pinterest 首頁推薦（讀網頁版首頁） ───────── */
+async function renderPinHome() {
+  const st = await window.api.pinHomeStatus();
+  $("pnHomeLogin").hidden = st.loggedIn;
+  $("pnHomeOn").hidden = !st.loggedIn;
+  $("pnHomeOn").checked = st.on;
+  $("pnHomeMore").hidden = !st.loggedIn;
+  $("pnHomeMsg").textContent = !st.loggedIn
+    ? "在程式的視窗裡登入一次 pinterest.com，之後會定時讀你的首頁"
+    : st.on ? "開著：小組件會隨機播放你首頁推薦的圖（大約每小時讀一次首頁）" : "已登入，打開開關就會用首頁推薦";
+}
+$("pnHomeLogin").addEventListener("click", async () => {
+  $("pnHomeMsg").textContent = "請在跳出來的視窗登入 Pinterest，登入好會自己關掉…";
+  const r = await window.api.pinHomeLogin();
+  toast(r.ok ? "已開啟首頁推薦" : "沒有登入");
+  renderPinHome();
+});
+$("pnHomeOn").addEventListener("change", async (e) => {
+  await window.api.pinHomeSet(e.target.checked);
+  toast(e.target.checked ? "改用首頁推薦" : "改用圖版");
+  renderPinHome();
+});
+$("pnHomeLogout").addEventListener("click", async () => {
+  await window.api.pinHomeLogout();
+  toast("已登出網頁");
+  renderPinHome();
+});
+renderPinHome();

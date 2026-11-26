@@ -9,6 +9,7 @@ const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
+const { createPinterestHome } = require("./pinterest-home");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
 // 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
@@ -64,6 +65,7 @@ const DEFAULTS = {
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
+  pinterestHome: false, // Pinterest 用「首頁推薦」（讀網頁版首頁）
   pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
@@ -807,7 +809,13 @@ async function fetchPinsRss() {
 
 const pinApi = createPinterestApi({ settings, save: saveSettings });
 
+const pinHome = createPinterestHome(log);
 async function fetchPins() {
+  // 首頁推薦（依興趣）：讀不到時退回圖版／公開網址
+  if (settings.pinterestHome) {
+    const r = await pinHome.fetchHome();
+    if (r.pins || r.loginExpired) return r;
+  }
   if (settings.pinterest.mode !== "api") return fetchPinsRss();
   try {
     return await pinApi.fetchPins();
@@ -817,6 +825,25 @@ async function fetchPins() {
 }
 
 ipcMain.handle("pins:get", fetchPins);
+ipcMain.handle("pins:home-status", async () => ({ on: !!settings.pinterestHome, loggedIn: await pinHome.isLoggedIn() }));
+ipcMain.handle("pins:home-login", async () => {
+  const ok = (await pinHome.login()) || (await pinHome.isLoggedIn());
+  if (ok) { settings.pinterestHome = true; saveSettings(); sendToKind("pinterest", "pins:changed"); }
+  return { ok };
+});
+ipcMain.handle("pins:home-set", async (_e, on) => {
+  settings.pinterestHome = !!on;
+  saveSettings();
+  sendToKind("pinterest", "pins:changed");
+  return { on: settings.pinterestHome };
+});
+ipcMain.handle("pins:home-logout", async () => {
+  await pinHome.logout();
+  settings.pinterestHome = false;
+  saveSettings();
+  sendToKind("pinterest", "pins:changed");
+  return { ok: true };
+});
 ipcMain.handle("pins:status", () => ({
   loggedIn: pinApi.isLoggedIn(),
   username: settings.pinterest.username || "",
