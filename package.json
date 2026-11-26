@@ -21,12 +21,15 @@
       "preload.js",
       "pinterest-api.js",
       "wallpaper.js",
+      "calendar.js",
+      "desktop-pin.ps1",
       "bt-watch.ps1",
       "renderer/**",
       "assets/**"
     ],
     "asarUnpack": [
-      "bt-watch.ps1"
+      "bt-watch.ps1",
+      "desktop-pin.ps1"
     ],
     "win": {
       "target": [
@@ -40,5 +43,8 @@
       "allowToChangeInstallationDirectory": true
     }
   },
-  "author": "Chuan"
+  "author": "Chuan",
+  "dependencies": {
+    "ical.js": "2.2.1"
+  }
 }

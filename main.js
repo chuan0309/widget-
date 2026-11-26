@@ -1,22 +1,25 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net, powerMonitor } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const { createPinterestApi } = require("./pinterest-api");
 const wallpaper = require("./wallpaper");
+const { createCalendar } = require("./calendar");
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 const DEFAULTS = {
   // "ios"：大圓角＋模糊桌布（像 iPhone）；"acrylic"：Windows 11 內建毛玻璃（圓角比較小）
   glass: "ios",
-  widgets: { clock: true, weather: true, battery: true, pinterest: true },
+  widgets: { clock: true, weather: true, battery: true, calendar: true, pinterest: true },
+  sizes: { clock: "s", weather: "s", battery: "m", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   // mode "rss"：讀公開網址；mode "api"：登入帳號（官方 API）
   pinterest: { mode: "rss", feed: "" },
   bluetooth: { notifyConnect: true, notifyLow: true, lowThreshold: 20, muted: {} },
+  calendar: { sources: [] }, // Google 日曆的 iCal 私人網址（加密存）
 };
 const FIRST_RUN = !fs.existsSync(SETTINGS_FILE);
 function loadSettings() {
@@ -26,6 +29,8 @@ function loadSettings() {
     return {
       ...DEFAULTS, ...saved,
       widgets: { ...DEFAULTS.widgets, ...saved.widgets },
+      sizes: { ...DEFAULTS.sizes, ...saved.sizes },
+      calendar: { ...DEFAULTS.calendar, ...saved.calendar },
       pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
       bluetooth: { ...DEFAULTS.bluetooth, ...saved.bluetooth, muted: { ...saved.bluetooth?.muted } },
     };
@@ -40,22 +45,38 @@ function saveSettings() {
 }
 
 /* ───────── 小組件視窗 ───────── */
-const WIDGETS = {
-  clock: { width: 170, height: 170 },
-  weather: { width: 170, height: 170 },
-  battery: { width: 356, height: 170 },
-  pinterest: { width: 356, height: 356 },
+const KINDS = ["battery", "clock", "weather", "calendar", "pinterest"]; // 也是預設排列的順序
+const SIZES = {
+  s: { width: 170, height: 170, cols: 1, rows: 1 },
+  m: { width: 356, height: 170, cols: 2, rows: 1 },
+  l: { width: 356, height: 356, cols: 2, rows: 2 },
 };
+const CELL = 186; // 170 + 16 間距
 const widgetWins = {};
+const sizeOf = (kind) => SIZES[settings.sizes[kind]] ? settings.sizes[kind] : "s";
 
+// 沒存過位置的小組件：從螢幕右上角開始，像 iPhone 主畫面一樣兩欄往下排
 function defaultPosition(kind) {
   const wa = screen.getPrimaryDisplay().workArea;
-  const right = wa.x + wa.width - 24;
+  const left = wa.x + wa.width - 24 - (CELL * 2 - 16);
   const top = wa.y + 24;
-  if (kind === "battery") return { x: right - 356, y: top };
-  if (kind === "clock") return { x: right - 356, y: top + 186 };
-  if (kind === "pinterest") return { x: right - 356, y: top + 372 };
-  return { x: right - 170, y: top + 186 };
+  const used = new Set();
+  for (const k of KINDS) {
+    if (!settings.widgets[k] && k !== kind) continue;
+    const { cols, rows } = SIZES[sizeOf(k)];
+    for (let r = 0; ; r++) {
+      for (let c = 0; c + cols <= 2; c++) {
+        const cells = [];
+        for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) cells.push(`${r + dr},${c + dc}`);
+        if (cells.some((x) => used.has(x))) continue;
+        cells.forEach((x) => used.add(x));
+        if (k === kind) return { x: left + c * CELL, y: top + r * CELL };
+        r = Infinity; break;
+      }
+      if (r === Infinity) break;
+    }
+  }
+  return { x: left, y: top };
 }
 
 function onSomeScreen({ x, y }) {
@@ -71,11 +92,16 @@ function glassOptions() {
   return { transparent: true, frame: false, backgroundColor: "#00000000" };
 }
 
+function widgetQuery(kind) {
+  return { kind, size: sizeOf(kind), glass: settings.glass };
+}
+
 function createWidget(kind) {
   const saved = settings.positions[kind];
   const pos = saved && onSomeScreen(saved) ? saved : defaultPosition(kind);
+  const { width, height } = SIZES[sizeOf(kind)];
   const win = new BrowserWindow({
-    ...WIDGETS[kind],
+    width, height,
     ...pos,
     ...glassOptions(),
     resizable: false,
@@ -84,12 +110,10 @@ function createWidget(kind) {
     fullscreenable: false,
     skipTaskbar: true,
     show: false,
-    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true },
+    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: true },
   });
-  win.loadFile(path.join(__dirname, "renderer", "widget.html"), {
-    query: { kind, glass: settings.glass },
-  });
-  win.once("ready-to-show", () => win.showInactive());
+  win.loadFile(path.join(__dirname, "renderer", "widget.html"), { query: widgetQuery(kind) });
+  win.once("ready-to-show", () => { win.showInactive(); pinToDesktop(win); });
   // 拖動時一直更新背景桌布的位置，玻璃後面的畫面才會對得上
   win.on("move", () => sendBackdrop(win));
   win.webContents.on("did-finish-load", () => sendBackdrop(win, true));
@@ -98,8 +122,61 @@ function createWidget(kind) {
     settings.positions[kind] = { x, y };
     saveSettings();
   });
+  // 點過小組件之後它會跑到最上面，點別的地方時就把它放回桌面那一層
+  win.on("blur", () => pinToDesktop(win));
   win.on("closed", () => delete widgetWins[kind]);
   widgetWins[kind] = win;
+}
+
+function setWidgetSize(kind, size) {
+  if (!SIZES[size]) return;
+  settings.sizes[kind] = size;
+  saveSettings();
+  managerWin?.webContents.send("mgr:refresh");
+  const win = widgetWins[kind];
+  if (!win || win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  win.setBounds({ x, y, width: SIZES[size].width, height: SIZES[size].height });
+  win.loadFile(path.join(__dirname, "renderer", "widget.html"), { query: widgetQuery(kind) });
+}
+
+const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", calendar: "Google 日曆", pinterest: "Pinterest" };
+
+// 在小組件上按右鍵
+ipcMain.on("widget:menu", (e) => {
+  const kind = Object.keys(widgetWins).find((k) => widgetWins[k].webContents === e.sender);
+  if (!kind) return;
+  const cur = sizeOf(kind);
+  Menu.buildFromTemplate([
+    { label: WIDGET_NAMES[kind], enabled: false },
+    { type: "separator" },
+    { label: "小", type: "radio", checked: cur === "s", click: () => setWidgetSize(kind, "s") },
+    { label: "中", type: "radio", checked: cur === "m", click: () => setWidgetSize(kind, "m") },
+    { label: "大", type: "radio", checked: cur === "l", click: () => setWidgetSize(kind, "l") },
+    { type: "separator" },
+    { label: "移除這個小組件", click: () => { setWidgetEnabled(kind, false); saveSettings(); managerWin?.webContents.send("mgr:refresh"); } },
+    { label: "開啟 Glass Widgets", click: () => openManager("widgets") },
+  ]).popup({ window: BrowserWindow.fromWebContents(e.sender) });
+});
+
+/* ───────── 小組件固定在「桌面那一層」───────── */
+// Chrome 之類的視窗永遠蓋在小組件上面；按 Win+D 也不會把小組件藏起來
+let pinner = null;
+function pinToDesktop(win) {
+  if (process.platform !== "win32" || !win || win.isDestroyed()) return;
+  if (!pinner || pinner.exitCode !== null) {
+    const script = path.join(__dirname, "desktop-pin.ps1").replace("app.asar", "app.asar.unpacked");
+    pinner = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
+    pinner.on("error", () => (pinner = null));
+  }
+  const handle = win.getNativeWindowHandle();
+  const hwnd = handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
+  pinner.stdin.write(hwnd.toString() + "\n");
+}
+
+/* ───────── 省電：螢幕鎖定、睡眠時小組件停止更新 ───────── */
+function setPaused(paused) {
+  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send("widget:paused", paused);
 }
 
 /* ───────── 圓角毛玻璃：把模糊的桌布貼在小組件後面 ───────── */
@@ -141,69 +218,54 @@ async function refreshWallpaper(force = false) {
 
 function rebuildWidgets() {
   Object.values(widgetWins).forEach((w) => w.destroy());
-  for (const kind of Object.keys(WIDGETS)) if (settings.widgets[kind]) createWidget(kind);
+  for (const kind of KINDS) if (settings.widgets[kind]) createWidget(kind);
 }
 
 function showAllWidgets() {
   Object.values(widgetWins).forEach((w) => w.showInactive());
 }
 
-/* ───────── 藍牙連線通知視窗 ───────── */
+/* ───────── 藍牙通知：MacBook 瀏海那樣，從螢幕正上方中間掉下來 ───────── */
+const NOTCH_W = 440, NOTCH_H = 120; // 視窗大小（瀏海本身比較小，動畫在視窗裡面跑）
 let popup = null;
-let popupTimer = null;
 let popupDevice = null;
+let popupTimer = null;
 
 function showPopup(device) {
   popupDevice = device;
   clearTimeout(popupTimer);
-  if (popup && !popup.isDestroyed()) {
-    popup.webContents.send("popup:device", device);
-  } else {
-    const W = 360, H = 400;
-    const wa = screen.getPrimaryDisplay().workArea;
-    const x = wa.x + wa.width - W - 16;
-    const y = wa.y + wa.height - H - 16;
+  const { bounds } = screen.getPrimaryDisplay();
+  if (!popup || popup.isDestroyed()) {
     popup = new BrowserWindow({
-      width: W, height: H, x, y: y + 24,
-      ...glassOptions(),
-      resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
-      skipTaskbar: true, alwaysOnTop: true, focusable: false, show: false,
+      width: NOTCH_W, height: NOTCH_H,
+      x: Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), y: bounds.y,
+      transparent: true, frame: false, backgroundColor: "#00000000",
+      resizable: false, movable: false, maximizable: false, minimizable: false, fullscreenable: false,
+      skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false,
       webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true },
     });
     popup.setAlwaysOnTop(true, "screen-saver");
-    popup.loadFile(path.join(__dirname, "renderer", "popup.html"), { query: { glass: settings.glass } });
-    popup.once("ready-to-show", () => {
-      popup.webContents.send("popup:device", popupDevice);
-      popup.setOpacity(0);
+    popup.setIgnoreMouseEvents(true, { forward: true }); // 透明的地方點得穿，滑到瀏海上才接收
+    popup.loadFile(path.join(__dirname, "renderer", "popup.html"));
+    popup.webContents.once("did-finish-load", () => {
       popup.showInactive();
-      animate(popup, { fromY: y + 24, toY: y, fromO: 0, toO: 1 });
+      popup.webContents.send("popup:device", popupDevice);
     });
     popup.on("closed", () => (popup = null));
+  } else {
+    popup.showInactive();
+    popup.webContents.send("popup:device", device);
   }
-  popupTimer = setTimeout(hidePopup, 7000);
+  popupTimer = setTimeout(hidePopup, 15000); // 保險：畫面自己收不起來時
 }
 
 function hidePopup() {
   clearTimeout(popupTimer);
-  if (!popup || popup.isDestroyed()) return;
-  const win = popup;
-  const [, y] = win.getPosition();
-  animate(win, { fromY: y, toY: y + 24, fromO: 1, toO: 0 }, () => win.destroy());
+  if (popup && !popup.isDestroyed()) popup.hide();
+  popupDevice = null;
 }
 
-// 視窗淡入/滑入的小動畫（Windows 視窗本身沒有 CSS 動畫可以用）
-function animate(win, { fromY, toY, fromO, toO }, done) {
-  const start = Date.now(), dur = 260;
-  const [x] = win.getPosition();
-  const t = setInterval(() => {
-    if (win.isDestroyed()) return clearInterval(t);
-    const p = Math.min(1, (Date.now() - start) / dur);
-    const e = 1 - Math.pow(1 - p, 3);
-    win.setPosition(x, Math.round(fromY + (toY - fromY) * e));
-    win.setOpacity(fromO + (toO - fromO) * e);
-    if (p === 1) { clearInterval(t); done?.(); }
-  }, 16);
-}
+ipcMain.on("popup:mouse", (_e, inside) => popup?.setIgnoreMouseEvents(!inside, { forward: true }));
 
 /* ───────── 偵測藍牙（背景跑 PowerShell）───────── */
 let devices = [];
@@ -322,9 +384,11 @@ function setWidgetEnabled(kind, on) {
 }
 
 function managerState() {
-  const { pinterest, ...rest } = settings;
+  const { pinterest, calendar: _cal, ...rest } = settings;
   return {
     settings: { ...rest, positions: undefined },
+    // 行事曆網址是祕密，只給名稱和顏色
+    calendars: (settings.calendar.sources || []).map((c, i) => ({ name: c.name || `行事曆 ${i + 1}`, color: c.color })),
     devices,
     autostart: app.getLoginItemSettings().openAtLogin,
     version: app.getVersion(),
@@ -335,7 +399,7 @@ function managerState() {
 
 ipcMain.handle("mgr:get", managerState);
 ipcMain.handle("mgr:set", (_e, patch = {}) => {
-  if (patch.widgets) for (const [k, v] of Object.entries(patch.widgets)) if (k in WIDGETS) setWidgetEnabled(k, !!v);
+  if (patch.widgets) for (const [k, v] of Object.entries(patch.widgets)) if (KINDS.includes(k)) setWidgetEnabled(k, !!v);
   if (patch.glass && patch.glass !== settings.glass && ["ios", "acrylic"].includes(patch.glass)) {
     settings.glass = patch.glass;
     rebuildWidgets();
@@ -353,6 +417,7 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     settings.city = { name: String(patch.city.name || "").slice(0, 40), lat: patch.city.lat, lon: patch.city.lon };
     widgetWins.weather?.webContents.reload(); // 天氣小組件重新讀
   }
+  if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
   if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
   saveSettings();
   return managerState();
@@ -363,6 +428,11 @@ ipcMain.on("mgr:reset-positions", () => {
   rebuildWidgets();
 });
 ipcMain.on("mgr:show-widgets", showAllWidgets);
+// 只開放打開 Google 日曆設定頁
+ipcMain.on("mgr:open-url", (_e, url) => {
+  if (String(url).startsWith("https://calendar.google.com/")) shell.openExternal(url);
+});
+ipcMain.on("mgr:open", (_e, section) => openManager(typeof section === "string" ? section : undefined));
 ipcMain.on("mgr:test-popup", () => showPopup({ id: "demo", name: "Aero Buds Pro", connected: true, battery: 85 }));
 ipcMain.on("mgr:open-folder", () => shell.openPath(app.getPath("userData")));
 ipcMain.on("mgr:quit", () => app.quit());
@@ -485,7 +555,20 @@ ipcMain.on("open-pin", (_e, link) => {
 
 /* ───────── IPC ───────── */
 ipcMain.handle("get-state", () => ({ devices, city: settings.city }));
-ipcMain.on("popup:close", hidePopup);
+
+/* ───────── Google 日曆 ───────── */
+const calendar = createCalendar({
+  settings, save: saveSettings,
+  onUpdate: (data) => {
+    widgetWins.calendar?.webContents.send("cal:update", data);
+    managerWin?.webContents.send("mgr:refresh");
+  },
+});
+ipcMain.handle("cal:get", () => calendar.get());
+ipcMain.handle("cal:add", (_e, url) => calendar.add(url));
+ipcMain.handle("cal:remove", (_e, i) => calendar.remove(Number(i)));
+ipcMain.handle("cal:refresh", () => calendar.refresh());
+ipcMain.on("popup:close", hidePopup); // 瀏海收回去的動畫跑完了
 
 /* ───────── 啟動 ───────── */
 if (!app.requestSingleInstanceLock()) {
@@ -504,11 +587,18 @@ if (!app.requestSingleInstanceLock()) {
     setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換
     screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
     startWatcher();
+    calendar.start();
+    // 鎖定螢幕、睡眠時小組件停止更新，省電
+    powerMonitor.on("lock-screen", () => setPaused(true));
+    powerMonitor.on("suspend", () => setPaused(true));
+    powerMonitor.on("unlock-screen", () => setPaused(false));
+    powerMonitor.on("resume", () => setPaused(false));
     if (FIRST_RUN) { saveSettings(); openManager(); } // 第一次打開時順便打開管理程式
   });
   app.on("before-quit", () => {
     app.isQuitting = true;
     watcher?.kill();
+    pinner?.kill();
   });
   app.on("window-all-closed", () => {}); // 關掉所有小組件也不要結束，留在系統匣
 }

@@ -49,6 +49,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .glass-ios .card.has-backdrop { background: transparent; }
 .glass-ios .card > .backdrop {
+  -webkit-app-region: none;
   position: absolute;
   z-index: 0;
   pointer-events: none;
@@ -62,7 +63,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 2;
+  /* 不能蓋在按鈕上面：Windows 會把這層當成「拖動視窗」的區域，按鈕就點不到了 */
+  z-index: 1;
+  -webkit-app-region: none;
   border-radius: inherit;
   corner-shape: inherit;
   padding: 1px;
@@ -76,6 +79,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* 玻璃本身的顏色＋左上角的柔光（在桌布上面、文字下面） */
 .card::after {
   content: "";
+  -webkit-app-region: none;
   position: absolute;
   inset: 0;
   border-radius: inherit;

@@ -19,6 +19,7 @@
       <button data-go="widgets"><span data-icon="widgets"></span>小組件</button>
       <button data-go="look"><span data-icon="palette"></span>外觀</button>
       <button data-go="bluetooth"><span data-icon="other"></span>藍牙通知</button>
+      <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
       <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
       <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
       <button data-go="general"><span data-icon="settings"></span>一般</button>
@@ -29,7 +30,7 @@
     <!-- 小組件 -->
     <section data-section="widgets">
       <h1>小組件</h1>
-      <p class="lead">選要放在桌面上的小組件。按住小組件就能拖到你想要的位置。</p>
+      <p class="lead">選要放在桌面上的小組件和大小。按住小組件就能拖到任何位置；在小組件上按右鍵也能改大小。</p>
       <div class="widget-grid" id="widgetGrid"></div>
       <div class="actions">
         <button class="btn" id="showWidgets"><span data-icon="visibility"></span>把小組件叫回來</button>
@@ -82,6 +83,34 @@
       <h2>已配對的裝置</h2>
       <div class="group" id="deviceList"></div>
       <p class="hint">關掉某台裝置的開關，那台就不會跳通知（電量小組件還是會顯示）。</p>
+    </section>
+
+    <!-- Google 日曆 -->
+    <section data-section="calendar">
+      <h1>Google 日曆</h1>
+      <p class="lead">把 Google 日曆的行程顯示在桌面上。不用登入，貼上行事曆的「私人網址」就好。</p>
+
+      <h2>已加入的行事曆</h2>
+      <div class="group" id="calList"></div>
+
+      <h2>加入行事曆</h2>
+      <div class="group">
+        <div class="row">
+          <input class="grow" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" spellcheck="false" />
+          <button class="btn small" id="calAdd">加入</button>
+        </div>
+      </div>
+      <p class="hint err" id="calErr"></p>
+
+      <h2>網址去哪裡找？（在電腦上做）</h2>
+      <div class="group steps">
+        <div class="row"><span class="num">1</span><span class="row-text"><b>打開 Google 日曆網頁版</b><small>calendar.google.com</small></span>
+          <button class="btn small ghost" id="calOpenGoogle"><span data-icon="open_in_new"></span>打開</button></div>
+        <div class="row"><span class="num">2</span><span class="row-text"><b>左邊「我的日曆」→ 滑到你的日曆上 → 按「⋮」→「設定和共用」</b></span></div>
+        <div class="row"><span class="num">3</span><span class="row-text"><b>往下滑到「整合日曆」</b><small>不是「公開網址」，是下面那個</small></span></div>
+        <div class="row"><span class="num">4</span><span class="row-text"><b>複製「iCal 格式的私人網址」，貼到上面</b><small>有好幾個日曆就一個一個加</small></span></div>
+      </div>
+      <p class="hint">這個網址等於你行事曆的鑰匙，不要給別人；程式會用 Windows 的加密存起來。行程每 15 分鐘更新一次。</p>
     </section>
 
     <!-- Pinterest -->

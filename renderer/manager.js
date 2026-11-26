@@ -34,31 +34,38 @@ function go(section) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.go === section));
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.dataset.section === section));
   if (section === "pinterest") loadPinterest();
+  if (section === "calendar") renderCalendars();
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 window.api.onGoto((section) => go(section));
 
 /* ───────── 小組件 ───────── */
 const WIDGET_INFO = [
-  { kind: "clock", name: "時鐘", size: "小", icon: "schedule" },
-  { kind: "weather", name: "天氣", size: "小", icon: "partly_cloudy" },
-  { kind: "battery", name: "電量", size: "中", icon: "buds" },
-  { kind: "pinterest", name: "Pinterest", size: "大", icon: "pin" },
+  { kind: "clock", name: "時鐘", icon: "schedule" },
+  { kind: "weather", name: "天氣", icon: "partly_cloudy" },
+  { kind: "battery", name: "電量", icon: "buds" },
+  { kind: "calendar", name: "Google 日曆", icon: "calendar" },
+  { kind: "pinterest", name: "Pinterest", icon: "pin" },
 ];
+const SIZE_NAMES = { s: "小", m: "中", l: "大" };
 
 function renderWidgets() {
   $("widgetGrid").replaceChildren(...WIDGET_INFO.map((w) => {
     const on = !!state.settings.widgets[w.kind];
-    const card = document.createElement("label");
+    const cur = state.settings.sizes?.[w.kind] || "s";
+    const card = document.createElement("div");
     card.className = "w-card" + (on ? " on" : "");
     card.innerHTML = `
       <span class="w-preview">${icon(w.icon)}</span>
-      <span class="w-foot">
-        <span class="row-text"><b>${w.name}</b><small>${w.size}尺寸</small></span>
+      <label class="w-foot">
+        <span class="row-text"><b>${w.name}</b><small>${on ? "在桌面上" : "沒有顯示"}</small></span>
         <input type="checkbox" class="switch" ${on ? "checked" : ""} />
-      </span>`;
+      </label>
+      <span class="seg">${["s", "m", "l"].map((z) => `<button data-size="${z}" class="${z === cur ? "on" : ""}">${SIZE_NAMES[z]}</button>`).join("")}</span>`;
     card.querySelector("input").addEventListener("change", (e) =>
       save({ widgets: { [w.kind]: e.target.checked } }, e.target.checked ? `已加入${w.name}` : `已移除${w.name}`));
+    card.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () =>
+      save({ sizes: { [w.kind]: b.dataset.size } }, `${w.name}改成${SIZE_NAMES[b.dataset.size]}尺寸`)));
     return card;
   }));
 }
@@ -209,6 +216,44 @@ $("pnUrlSave").addEventListener("click", async () => {
   loadPinterest();
 });
 
+/* ───────── Google 日曆 ───────── */
+function renderCalendars() {
+  const list = state.calendars || [];
+  if (list.length === 0) {
+    $("calList").innerHTML = `<div class="row"><span class="row-icon">${icon("calendar")}</span>
+      <span class="row-text"><b>還沒有加入行事曆</b><small>照下面的步驟拿到網址，貼上就好</small></span></div>`;
+    return;
+  }
+  $("calList").replaceChildren(...list.map((c, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="dot" style="background:${c.color}"></span>
+      <span class="row-text"><b>${escapeHTML(c.name)}</b></span>
+      <button class="btn small ghost">${icon("delete")}移除</button>`;
+    row.querySelector("button").addEventListener("click", async () => {
+      await window.api.calRemove(i);
+      state = await window.api.mgrGet();
+      renderCalendars();
+      toast("已移除");
+    });
+    return row;
+  }));
+}
+$("calAdd").addEventListener("click", async () => {
+  $("calErr").textContent = "";
+  $("calAdd").disabled = true;
+  $("calAdd").textContent = "讀取中…";
+  const res = await window.api.calAdd($("calUrl").value);
+  $("calAdd").disabled = false;
+  $("calAdd").textContent = "加入";
+  if (res.error) { $("calErr").textContent = res.error; return; }
+  $("calUrl").value = "";
+  state = await window.api.mgrGet();
+  renderCalendars();
+  toast(`已加入「${res.name || "行事曆"}」`);
+});
+$("calOpenGoogle").addEventListener("click", () => window.api.mgrOpenUrl("https://calendar.google.com/calendar/r/settings"));
+
 /* ───────── 天氣 ───────── */
 function renderCity() {
   const c = state.settings.city;
@@ -267,7 +312,10 @@ function render() {
   renderBluetooth();
   renderCity();
   renderGeneral();
+  renderCalendars();
 }
+// 從小組件右鍵改了大小、或日曆更新時，重新讀一次
+window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
 
 (async () => {
   state = await window.api.mgrGet();

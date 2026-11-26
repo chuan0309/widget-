@@ -3,6 +3,17 @@ const { contextBridge, ipcRenderer } = require("electron");
 // 只開放這幾個功能給畫面用，畫面本身碰不到電腦其他東西
 contextBridge.exposeInMainWorld("api", {
   getState: () => ipcRenderer.invoke("get-state"),
+  widgetMenu: () => ipcRenderer.send("widget:menu"),
+  mgrOpen: (section) => ipcRenderer.send("mgr:open", section),
+  mgrOpenUrl: (url) => ipcRenderer.send("mgr:open-url", url),
+  onPaused: (cb) => ipcRenderer.on("widget:paused", (_e, p) => cb(p)),
+  popupMouse: (inside) => ipcRenderer.send("popup:mouse", inside),
+  calGet: () => ipcRenderer.invoke("cal:get"),
+  calAdd: (url) => ipcRenderer.invoke("cal:add", url),
+  calRemove: (i) => ipcRenderer.invoke("cal:remove", i),
+  calRefresh: () => ipcRenderer.invoke("cal:refresh"),
+  onCalUpdate: (cb) => ipcRenderer.on("cal:update", (_e, d) => cb(d)),
+  onMgrRefresh: (cb) => ipcRenderer.on("mgr:refresh", () => cb()),
   onBackdrop: (cb) => ipcRenderer.on("backdrop", (_e, data) => cb(data)),
   onDevices: (cb) => ipcRenderer.on("devices", (_e, list) => cb(list)),
   onPopupDevice: (cb) => ipcRenderer.on("popup:device", (_e, d) => cb(d)),

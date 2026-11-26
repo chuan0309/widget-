@@ -17,6 +17,7 @@ $KEY_BATTERY   = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $KEY_COD       = '{2BD67D8B-8BEB-48D5-87E0-6CDA3428040A} 10'   # Bluetooth Class of Device
 
 $POLL_SECONDS = 3
+$USB_HEADSETS = @('INZONE')   # name keywords of headsets that use their own USB receiver
 $GATT_EVERY_SECONDS = 60
 
 function Get-Mac([string]$id) {
@@ -26,7 +27,7 @@ function Get-Mac([string]$id) {
   return $null
 }
 
-# ───── WinRT helpers for the GATT battery read (Windows PowerShell 5.1) ─────
+# ----- WinRT helpers for the GATT battery read (Windows PowerShell 5.1) -----
 $gattReady = $false
 try {
   Add-Type -AssemblyName System.Runtime.WindowsRuntime
@@ -78,7 +79,7 @@ function Read-GattBattery([string]$mac) {
 
 $gattCache = @{}   # mac -> @{ at = [datetime]; level = int or $null }
 
-# ───── Main loop ─────
+# ----- Main loop -----
 $last = ''
 while ($true) {
   $devices = @{}
@@ -125,6 +126,23 @@ while ($true) {
     # Forget cached readings of devices that went away
     foreach ($k in @($gattCache.Keys)) {
       if (-not $devices.ContainsKey($k) -or -not $devices[$k].connected) { $gattCache.Remove($k) }
+    }
+  }
+
+  # Some wireless headsets connect through their own USB receiver instead of
+  # Bluetooth (e.g. Sony INZONE). They show up as audio devices; treat a
+  # working audio device whose name matches as "connected". No battery there.
+  foreach ($a in @(Get-PnpDevice -Class AudioEndpoint -PresentOnly | Where-Object { $_.Status -eq 'OK' })) {
+    foreach ($k in $USB_HEADSETS) {
+      if ($a.FriendlyName -notmatch [regex]::Escape($k)) { continue }
+      $name = $a.FriendlyName
+      # "Headphones (2- INZONE Buds)" -> "INZONE Buds"
+      if ($name -match '\(([^()]*' + [regex]::Escape($k) + '[^()]*)\)') { $name = $Matches[1] }
+      $name = ($name -replace '^\s*\d+\s*-\s*', '').Trim()
+      $id = 'USB-' + (($name -replace '[^A-Za-z0-9]', '').ToUpper())
+      if (-not $devices.ContainsKey($id)) {
+        $devices[$id] = [ordered]@{ id = $id; name = $name; connected = $true; battery = $null; cod = $null; le = $false }
+      }
     }
   }
 
