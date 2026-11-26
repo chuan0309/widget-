@@ -22,14 +22,16 @@ function loadOAuthConfig() {
   let f = {};
   try { f = JSON.parse(fs.readFileSync(path.join(__dirname, "oauth.json"), "utf8")); } catch {}
   const e = process.env;
+  // 去掉前後的空白和換行（貼到 GitHub Secrets 時常常多一個換行，Google 會說找不到用戶端）
+  const t = (...v) => String(v.find((x) => x) || "").trim();
   return {
     google: {
-      clientId: f.google?.clientId || e.GW_GOOGLE_CLIENT_ID || "",
-      clientSecret: f.google?.clientSecret || e.GW_GOOGLE_CLIENT_SECRET || "",
+      clientId: t(f.google?.clientId, e.GW_GOOGLE_CLIENT_ID),
+      clientSecret: t(f.google?.clientSecret, e.GW_GOOGLE_CLIENT_SECRET),
     },
     pinterest: {
-      appId: f.pinterest?.appId || e.GW_PINTEREST_APP_ID || "",
-      appSecret: f.pinterest?.appSecret || e.GW_PINTEREST_APP_SECRET || "",
+      appId: t(f.pinterest?.appId, e.GW_PINTEREST_APP_ID),
+      appSecret: t(f.pinterest?.appSecret, e.GW_PINTEREST_APP_SECRET),
     },
   };
 }
