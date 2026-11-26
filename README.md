@@ -1,16 +1,16 @@
-# widget-
+# Glass Widgets
 
-iOS 液態玻璃風格的小組件＋藍牙連線通知。有兩個版本：
+Windows 11 桌面小組件 App，iOS 液態玻璃風格：
 
-| 資料夾 | 是什麼 |
-| --- | --- |
-| `desktop/` | **Windows 11 桌面版**：小組件真的貼在桌面上，藍牙裝置連上電腦時右下角跳出玻璃通知 |
-| `web/` | 網頁版 Demo：模擬 iPhone 畫面，用瀏覽器打開 `web/index.html` 就能看 |
+- 桌面上的玻璃小組件：時鐘、天氣、電量、Pinterest
+- 藍牙裝置連上電腦時，右下角跳出玻璃通知（電量低也會提醒）
 
-## Windows 桌面版怎麼跑
+用 [Electron](https://www.electronjs.org/) 做的，跟 Discord、VS Code 桌面版是同一種技術，打包後就是一般的 Windows 程式（.exe）。
+
+## 怎麼跑
 
 1. 先裝 [Node.js](https://nodejs.org/)（選 LTS 版，一路按下一步）
-2. 在 `desktop` 資料夾開終端機（資料夾空白處 Shift + 右鍵 →「在終端機中開啟」），輸入：
+2. 在這個專案資料夾開終端機（資料夾空白處 Shift + 右鍵 →「在終端機中開啟」），輸入：
 
    ```
    npm install
@@ -25,7 +25,7 @@ iOS 液態玻璃風格的小組件＋藍牙連線通知。有兩個版本：
 npm run dist
 ```
 
-做好的檔案在 `desktop/dist/`，有安裝版跟免安裝版（portable）。
+做好的檔案在 `dist/`，有安裝版跟免安裝版（portable）。
 
 ### 使用方式
 
@@ -80,4 +80,4 @@ Pinterest 規定要用官方 API，得先申請一個「開發者 App」，只�
 
 ## 圖示來源
 
-裝置、天氣等圖示來自 Google 的 [Material Symbols](https://fonts.google.com/icons)（Apache License 2.0），授權全文在 `desktop/renderer/ICONS-LICENSE.txt`。
+裝置、天氣等圖示來自 Google 的 [Material Symbols](https://fonts.google.com/icons)（Apache License 2.0），授權全文在 `renderer/ICONS-LICENSE.txt`。
