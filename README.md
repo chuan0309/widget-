@@ -13,14 +13,14 @@ Windows 11 桌面小組件 App，iOS 液態玻璃風格：
 1. 在電腦上打開這個 GitHub 專案 →「Actions」分頁 → 點最上面那次執行（綠色勾勾）
 2. 拉到最下面「Artifacts」，下載 **Glass-Widgets-Windows**（是一個 zip）
 3. 解壓縮，裡面有兩個檔案，選一個：
-   - `Glass Widgets Setup 1.0.0.exe`：**安裝版**，會出現在開始選單
-   - `Glass Widgets 1.0.0.exe`：**免安裝版**，直接點兩下就能用
+   - `Glass-Widgets-Setup-1.0.x.exe`：**安裝版**，會出現在開始選單，**會自動更新**
+   - `Glass-Widgets-Portable-1.0.x.exe`：**免安裝版**，直接點兩下就能用（不會自動更新）
 4. 第一次打開 Windows 可能會跳出藍色的「Windows 已保護您的電腦」→ 按「其他資訊」→「仍要執行」
    （因為這個程式沒有買數位簽章，不是病毒）
 
 ### 自動更新
 
-用「安裝版」（`Glass Widgets Setup ….exe`）安裝的話，程式會自己檢查新版（開機 30 秒後、之後每 6 小時），
+用「安裝版」（`Glass-Widgets-Setup-….exe`）安裝的話，程式會自己檢查新版（開機 30 秒後、之後每 6 小時），
 在背景下載好，關掉程式時自動裝好；也可以在管理程式「一般」頁按「立即重新啟動並更新」。
 
 - 新版是從這個專案的 GitHub **Releases** 下載的，所以 **專案要設成公開** 才能自動更新

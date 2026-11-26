@@ -40,7 +40,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Glass-Widgets-Setup-${version}.${ext}"
     },
     "publish": [
       {
@@ -49,7 +50,10 @@
         "repo": "widget-",
         "releaseType": "release"
       }
-    ]
+    ],
+    "portable": {
+      "artifactName": "Glass-Widgets-Portable-${version}.${ext}"
+    }
   },
   "author": "Chuan",
   "dependencies": {

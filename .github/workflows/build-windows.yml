@@ -28,18 +28,15 @@ jobs:
         run: npm ci
 
       - name: Set version
+        id: version
         shell: bash
-        run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+        run: |
+          npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+          echo "value=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
-      - name: Build (test build, not published)
-        if: github.ref != 'refs/heads/main'
+      # 先全部打包好（不在這一步上傳，避免兩個檔案同時建立 Release 撞在一起）
+      - name: Build installer and portable exe
         run: npx electron-builder --win nsis portable --x64 --publish never
-
-      - name: Build and publish release (main)
-        if: github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis portable --x64 --publish always
 
       - name: Upload for download
         uses: actions/upload-artifact@v4
@@ -47,3 +44,19 @@ jobs:
           name: Glass-Widgets-Windows
           path: dist/*.exe
           if-no-files-found: error
+
+      # 只有 main 才發佈；latest.yml 和 .blockmap 是自動更新要用的
+      - name: Publish release (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.value }}
+          name: Glass Widgets ${{ steps.version.outputs.value }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/Glass-Widgets-Setup-*.exe
+            dist/Glass-Widgets-Setup-*.exe.blockmap
+            dist/Glass-Widgets-Portable-*.exe
+            dist/latest.yml
