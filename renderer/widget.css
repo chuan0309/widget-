@@ -170,6 +170,12 @@
 .size-s .batt-item { width: auto; gap: 3px; font-size: 13px; }
 .size-s .batt-item .ring { --size: 50px; }
 .size-s .batt-item small { display: none; }
+/* 跟 Mac 的「電池」小工具一樣：中只有圓環＋百分比（不寫名字，滑鼠移上去看），小只有圓環；圓環中間不填底色 */
+.size-s .batt-item span { display: none; }
+.size-m .batt-item small { display: none; }
+.batt-item .ring { background: none; }
+.batt-item .ring svg.ms { width: calc(var(--size) * 0.38); height: calc(var(--size) * 0.38); }
+.pane .size-m .batt-item span, .size-m .batt-item span { font-size: 13px; font-weight: max(400, calc(var(--fw, 600) - 100)); }
 /* 大：一行一台，固定 6 列平均分配高度（像 Apple 的「電池」大組件） */
 .size-l .batt { display: grid; grid-template-rows: repeat(var(--rows, 6), 1fr); grid-template-columns: 1fr; justify-content: stretch; align-items: stretch; padding: 8px 18px; gap: 0; }
 .batt-row {
@@ -180,22 +186,24 @@
 /* 分隔線從名稱那一欄開始（圖示下面沒有線），跟 Apple 一樣 */
 .batt-row + .batt-row::before { content: ""; position: absolute; top: 0; left: 42px; right: -18px; border-top: 0.5px solid rgb(var(--fg) / 0.16); }
 .batt-row .bicon { display: grid; place-items: center; }
-.batt-row .bicon svg { width: 24px; height: 24px; }
+.batt-row .bicon svg { width: 20px; height: 20px; }
 .batt-row .bicon svg:not(.ms) { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .batt-row b { font-size: 14.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .batt-row .pct { font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 14.5px; text-align: right; font-variant-numeric: tabular-nums; }
+/* Mac 的電池清單字比較細（一般粗細），比其他小組件細一級 */
+.pane .batt-row :is(b, .pct) { font-weight: max(400, calc(var(--fw, 600) - 100)); }
 .batt-row .pct.none { font-size: 11.5px; color: var(--ink-soft); grid-column: 3 / 5; }
 /* 橫的電池圖：外框＋右邊小凸點，裡面照電量填滿；充電中綠色＋閃電，20% 以下紅色 */
 .bglyph {
   position: relative; width: 24px; height: 11.5px; border-radius: 3.5px;
-  box-shadow: inset 0 0 0 1.1px rgb(var(--fg) / 0.45); padding: 2px; box-sizing: border-box;
+  box-shadow: inset 0 0 0 1px rgb(var(--fg) / 0.32); padding: 2px; box-sizing: border-box;
   display: flex; align-items: stretch;
 }
-.bglyph::after { content: ""; position: absolute; right: -3px; top: 50%; width: 1.6px; height: 4px; translate: 0 -50%; border-radius: 0 1px 1px 0; background: rgb(var(--fg) / 0.45); }
-.bglyph i { display: block; border-radius: 1.5px; background: var(--ink); }
+.bglyph::after { content: ""; position: absolute; right: -3px; top: 50%; width: 1.6px; height: 4px; translate: 0 -50%; border-radius: 0 1px 1px 0; background: rgb(var(--fg) / 0.32); }
+.bglyph i { display: block; border-radius: 1.5px; background: var(--ok); } /* 跟 Mac 的「電池」小工具一樣：平常就是綠色 */
 .bglyph.low i { background: #ff453a; }
 .bglyph.charging i { background: var(--ok); }
-.bglyph svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 6.5px; height: 9.5px; fill: #fff; stroke: rgba(0, 0, 0, 0.55); stroke-width: 1.2px; paint-order: stroke; }
+.bglyph svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 6.5px; height: 9.5px; fill: #1c1c1e; stroke: rgba(255, 255, 255, 0.9); stroke-width: 1.1px; paint-order: stroke; }
 /* 充電中：跟 iPhone「電池」小組件一樣——圓環變綠，閃電放在圓環正上方，
    圓環在閃電那裡挖一個缺口（不是另外加一個圓形徽章） */
 .ring.charging { --ring-color: var(--ok); }
@@ -350,7 +358,7 @@ body.bg-light .pane.pinterest { --pn-bg: #fff; }
    標題比內文粗一點（粗的時候 +100，細的時候一樣細）；大數字在細的時候再細一點，像 iPhone */
 .pane { font-weight: var(--fw, 600); }
 .pane :is(small, span, div, p, b, i, strong) { font-weight: inherit; }
-.pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p) {
+.pane :is(.wt-city, .cal-ev b, .au-row b, .cal-month-head b, .setup-msg p) {
   font-weight: clamp(var(--fw, 600), calc(var(--fw, 600) * 1.5 - 200), min(calc(var(--fw, 600) + 100), 900));
 }
 .pane :is(.digital, .cal-day) {
