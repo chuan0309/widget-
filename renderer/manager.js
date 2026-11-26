@@ -131,10 +131,17 @@ function renderLook() {
   $("tint").value = state.settings.tint ?? 30;
   showTint($("tint").value);
   const bg = state.settings.background || "glass";
-  document.querySelectorAll(".bg-card").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
+  document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
   $("tintBlock").hidden = bg !== "glass"; // 透明程度只有玻璃背景才有用
+  const fw = state.settings.fontWeight || "bold";
+  document.querySelectorAll("[data-font]").forEach((c) => c.classList.toggle("on", c.dataset.font === fw));
 }
-document.querySelectorAll(".bg-card").forEach((c) => c.addEventListener("click", () => {
+document.querySelectorAll("[data-font]").forEach((c) => c.addEventListener("click", () => {
+  state.settings.fontWeight = c.dataset.font;
+  renderLook();
+  save({ fontWeight: c.dataset.font }, c.dataset.font === "light" ? "改成細體" : "改成粗體");
+}));
+document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.addEventListener("click", () => {
   state.settings.background = c.dataset.bg;
   renderLook();
   save({ background: c.dataset.bg }, "已套用");

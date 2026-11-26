@@ -106,6 +106,7 @@ api.onHostInit?.((d) => {
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
+  document.body.classList.toggle("font-light", d.fontWeight === "light");
   if (d.pinInterval) store.pinInterval = d.pinInterval;
   if (Array.isArray(d.worldClocks)) { store.worldClocks = d.worldClocks; refresh("clock"); }
   for (const inst of instances.values()) layoutBackdrop(inst);

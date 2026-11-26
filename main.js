@@ -74,6 +74,7 @@ const DEFAULTS = {
     { name: "倫敦", tz: "Europe/London" }, { name: "紐約", tz: "America/New_York" },
   ],
   pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
+  fontWeight: "bold", // 小組件字體：bold 全部粗體／light 全部細體
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
@@ -198,7 +199,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, fontWeight: settings.fontWeight, pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
   sendLayout();
 }
 
@@ -695,6 +696,7 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
   if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
   if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
   if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");
+  if (["bold", "light"].includes(patch.fontWeight)) { settings.fontWeight = patch.fontWeight; sendHostInit(); }
   if (["glass", "dark", "light"].includes(patch.background)) {
     settings.background = patch.background;
     sendToKind(null, "glass:background", settings.background);
