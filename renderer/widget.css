@@ -77,12 +77,17 @@
 .wt { height: 100%; padding: 16px; display: flex; flex-direction: column; }
 /* 像 Apple 的天氣：用天空的顏色當背景（白天、晚上、陰天、下雨不一樣） */
 .pane.weather { --sky: linear-gradient(180deg, #2f6fd6, #5aa2ec); background: var(--sky); --fg: 255 255 255; --ink: #fff; --ink-soft: rgba(255, 255, 255, 0.72); color: #fff; }
-.pane.weather.sky-clear-night, .pane.weather.sky-cloud-night { --sky: linear-gradient(180deg, #0c1530, #24345e); }
-.pane.weather.sky-cloud { --sky: linear-gradient(180deg, #4f6d8f, #8aa3bd); }
-.pane.weather.sky-rain { --sky: linear-gradient(180deg, #3a4a5e, #64788f); }
-.pane.weather.sky-rain-night { --sky: linear-gradient(180deg, #151d2b, #36445a); }
-.pane.weather.sky-snow { --sky: linear-gradient(180deg, #6b84a3, #a9bcd2); }
-.pane.weather.sky-storm { --sky: linear-gradient(180deg, #232a3a, #4b5468); }
+/* 顏色取自 iPhone 天氣小組件的截圖 */
+.pane.weather.sky-clear { --sky: linear-gradient(180deg, #2c6ccb, #5b9ee6); }
+.pane.weather.sky-cloud { --sky: linear-gradient(180deg, #5d6c82, #7c8ba0); }
+.pane.weather.sky-rain { --sky: linear-gradient(180deg, #4a5466, #5f6879); }
+.pane.weather.sky-snow { --sky: linear-gradient(180deg, #7d8ea6, #a6b4c6); }
+.pane.weather.sky-storm { --sky: linear-gradient(180deg, #2c313e, #444a59); }
+.pane.weather.sky-clear-night { --sky: linear-gradient(180deg, #292a3e, #2f3247 55%, #353b53); }
+.pane.weather.sky-cloud-night { --sky: linear-gradient(180deg, #292a3e, #31354a 55%, #353b52); }
+.pane.weather.sky-overcast-night { --sky: linear-gradient(180deg, #373b46, #353942 55%, #30343f); }
+.pane.weather.sky-rain-night { --sky: linear-gradient(180deg, #2b2f3d, #343947 55%, #3a3f4e); }
+.pane.weather.sky-sunset { --sky: linear-gradient(180deg, #58668a, #737c9f 40%, #908e9c 72%, #a09ba3); }
 .wt-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .wt-city { font-size: 14px; font-weight: 600; }
 .wt-temp { margin-top: 2px; font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 48px; font-weight: 300; line-height: 1.05; letter-spacing: -0.03em; }

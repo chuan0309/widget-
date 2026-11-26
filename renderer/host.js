@@ -431,17 +431,20 @@ function tempColor(t) {
   for (const [v, c] of stops) if (t <= v) return c;
   return "#ff453a";
 }
-// 天氣背景：像 Apple 天氣一樣用天空的顏色
-function skyClass(code, isDay) {
+// 天氣背景：像 Apple 天氣一樣，依天氣、白天晚上、日出日落換天空的顏色
+function skyClass(code, isDay, data) {
   const night = isDay === 0;
-  if (code <= 1) return night ? "sky-clear-night" : "sky-clear";
-  if (code <= 48) return night ? "sky-cloud-night" : "sky-cloud";
+  // 日出、日落前後 40 分鐘：藍色漸漸轉成粉紫（晴天、少雲時）
+  const now = Date.now();
+  const edges = [data?.daily?.sunrise?.[0], data?.daily?.sunset?.[0]].filter(Boolean).map((t) => new Date(t).getTime());
+  if (code <= 2 && edges.some((t) => Math.abs(now - t) <= 40 * 60 * 1000)) return "sky-sunset";
+  if (code <= 2) return night ? (code <= 1 ? "sky-clear-night" : "sky-cloud-night") : code <= 1 ? "sky-clear" : "sky-clear";
+  if (code === 3) return night ? "sky-overcast-night" : "sky-cloud";
+  if (code <= 48) return night ? "sky-overcast-night" : "sky-cloud";
   if (code <= 67 || (code >= 80 && code <= 82)) return night ? "sky-rain-night" : "sky-rain";
   if (code <= 77 || code === 85 || code === 86) return "sky-snow";
   return "sky-storm";
 }
-// 晚上的晴天／少雲換成月亮
-// 彩色天氣圖示（renderer/wxicons.js）：白雲、黃太陽、藍雨滴…
 const wIcon = (code, night = false) => wxIcon(wxKind(code), night);
 
 let weatherAt = 0;
@@ -462,7 +465,7 @@ async function loadWeather(force = false) {
     }
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
       "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day" +
-      "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=6";
+      "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=6";
     store.weather = await (await fetch(url)).json();
     store.weatherError = false;
   } catch {
@@ -488,7 +491,7 @@ WIDGETS.weather = {
     if (cur.is_day === 0 && cur.weather_code === 0) desc = "晴朗";
     const bigIcon = wIcon(cur.weather_code, cur.is_day === 0);
     if (cur.desc) desc = esc(cur.desc); // 氣象署的說法（例如「多雲時晴」）
-    pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
+    pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day, data)}`;
     const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
