@@ -199,46 +199,26 @@
 body.paused *, body.paused *::before, body.paused *::after { animation-play-state: paused !important; }
 
 /* ───────── Pinterest ───────── */
-.pinterest { display: flex; flex-direction: column; }
-.pn-head { height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 14px; }
-.pn-head b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 像 iPhone 的照片小組件：滿版大圖，隨機輪播、淡入淡出，左上角小小的 P */
+.pane.pinterest { cursor: pointer; background: rgba(0, 0, 0, 0.15); }
+.pn-photo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity 1.2s ease;
+  -webkit-user-drag: none;
+}
+.pn-photo.on { opacity: 1; }
+.pn-shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 30%); }
+.pn-head { position: absolute; top: 12px; left: 12px; z-index: 2; }
 /* Pinterest 的紅色 P 徽章 */
 .pn-badge {
-  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
   display: grid; place-items: center;
   background: #e60023; color: #fff;
-  font: 800 16px/1 Georgia, "Times New Roman", serif; letter-spacing: -0.02em;
-  text-shadow: none;
+  font: 800 15px/1 Georgia, "Times New Roman", serif; letter-spacing: -0.02em;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .setup-msg .pn-badge { width: 36px; height: 36px; font-size: 24px; }
-/* 瀑布流：每欄用不同速度往上捲，看起來像在滑 Pinterest */
-.pn-wall {
-  flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 10px; overflow: hidden;
-  -webkit-mask: linear-gradient(transparent, #000 12px, #000 calc(100% - 22px), transparent);
-}
-.pn-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; animation: pn-scroll var(--dur, 60s) linear infinite; will-change: transform; }
-.pn-wall:hover .pn-col { animation-play-state: paused; }
-@keyframes pn-scroll { to { transform: translateY(calc(-50% - 4px)); } }
-.pn-pin {
-  display: block; width: 100%; border-radius: 14px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
-  opacity: 0; transition: opacity 0.5s, transform 0.25s var(--ease-spring);
-}
-.pn-pin.loaded { opacity: 1; }
-.pn-pin:hover { transform: scale(1.03); }
-/* 小：一次一張，慢慢換 */
-.size-s .pn-head { position: absolute; top: 10px; left: 10px; height: auto; padding: 0; z-index: 3; }
-.size-s .pn-wall { padding: 0; -webkit-mask: none; position: relative; }
-.size-s .pn-col { animation: none; display: block; position: absolute; inset: 0; }
-.size-s .pn-pin { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; box-shadow: none; transition: opacity 1.2s; }
-.size-s .pn-pin.loaded { opacity: 0; }
-.size-s .pn-pin.loaded.on { opacity: 1; }
-.size-s .pn-pin:hover { transform: none; }
-/* 中：三欄，圖小一點 */
-.size-m .pn-head { height: 38px; }
-.size-m .pn-pin { border-radius: 10px; }
+.setup-msg { cursor: default; }
 
 /* ───────── 疊放 ───────── */
 .stack-scroll {

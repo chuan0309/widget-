@@ -219,7 +219,7 @@ document.addEventListener("mousemove", (e) => {
 document.addEventListener("mouseleave", () => !dragging && setInteractive(false));
 
 /* ───────── 拖動＋自動對齊 ───────── */
-const NO_DRAG = "button, input, a, select, textarea, label, .pn-pin, .stack-dots i";
+const NO_DRAG = "button, input, a, select, textarea, label, .stack-dots i";
 function instOf(el) {
   const card = el.closest?.(".card");
   for (const inst of instances.values()) if (inst.el === card) return inst;
@@ -631,21 +631,37 @@ setInterval(() => refresh("calendar"), 60 * 1000); // 過了時間的行程會�
 /* ───────── Pinterest ───────── */
 const PIN_BADGE = `<span class="pn-badge" aria-label="Pinterest">P</span>`;
 
+// 像 iPhone 的照片小組件：一次一張滿版大圖，隨機順序、每 12 秒淡入換下一張
+const PIN_EVERY = 12000;
 WIDGETS.pinterest = {
   mount(pane, inst) {
     inst.slide = 0;
-    if (inst.size === "s") {
-      inst.timers.push(setInterval(() => {
-        const imgs = pane.querySelectorAll(".pn-pin");
-        if (paused || imgs.length < 2) return;
-        imgs[inst.slide % imgs.length].classList.remove("on");
-        inst.slide = (inst.slide + 1) % imgs.length;
-        imgs[inst.slide].classList.add("on");
-      }, 8000));
-    }
+    inst.timers.push(setInterval(() => {
+      if (paused || inst.el.matches(":hover")) return;
+      WIDGETS.pinterest.next(pane, inst);
+    }, PIN_EVERY));
   },
   tap(pane, inst, target) {
-    if (target.closest("[data-setup]")) api.mgrOpen("pinterest");
+    if (target.closest("[data-setup]")) return api.mgrOpen("pinterest");
+    const link = pane.querySelector(".pn-photo.on")?.dataset.link;
+    if (link) api.openPin(link);
+  },
+  // 換下一張：先在背後載好，載完才淡入（不會閃白）
+  next(pane, inst) {
+    const pins = store.pins?.pins;
+    const layers = pane.querySelectorAll(".pn-photo");
+    if (!pins?.length || layers.length < 2) return;
+    inst.slide = (inst.slide + 1) % pins.length;
+    const p = pins[inst.slide];
+    const back = [...layers].find((l) => !l.classList.contains("on"));
+    const img = new Image();
+    img.onload = () => {
+      back.src = p.img;
+      back.dataset.link = p.link;
+      back.alt = p.title;
+      layers.forEach((l) => l.classList.toggle("on", l === back));
+    };
+    img.src = p.img;
   },
   render(pane, inst) {
     const r = store.pins;
@@ -654,27 +670,19 @@ WIDGETS.pinterest = {
       setHTML(pane, `<div class="setup-msg">${PIN_BADGE}<p>Pinterest</p><small>${esc(msg)}</small>${r ? `<span class="setup-btn" data-setup>去設定</span>` : ""}</div>`);
       return;
     }
-    // 同一組圖就不重畫（不然圖片會重新載入、閃一下）
-    const sig = r.pins.map((p) => p.img).join("|") + inst.size;
+    // 同一組圖就不重來（不然會跳回第一張）
+    const sig = r.pins.map((p) => p.img).join("|");
     if (pane.__sig === sig) return;
     pane.__sig = sig;
-    const pinImg = (p) => `<img class="pn-pin" src="${esc(p.img)}" alt="${esc(p.title)}" title="${esc(p.title)}" draggable="false" decoding="async" loading="lazy" data-link="${esc(p.link)}">`;
-    if (inst.size === "s") {
-      pane.innerHTML = `<div class="pn-head">${PIN_BADGE}</div><div class="pn-wall"><div class="pn-col a">${r.pins.map(pinImg).join("")}</div></div>`;
-      inst.slide = 0;
-      pane.querySelector(".pn-pin")?.classList.add("on");
-    } else {
-      const n = inst.size === "m" ? 3 : 2;
-      const cols = Array.from({ length: n }, () => []);
-      r.pins.forEach((p, i) => cols[i % n].push(p));
-      // 同一組放兩次，捲到一半時剛好接回開頭，看起來就是無限捲動
-      pane.innerHTML = `<div class="pn-head">${PIN_BADGE}<b>${esc(r.title || "Pinterest")}</b></div>
-        <div class="pn-wall">${cols.map((c, i) => `<div class="pn-col" style="--dur:${Math.max(20, c.length * [7, 9, 8][i])}s">${c.map(pinImg).join("")}${c.map(pinImg).join("")}</div>`).join("")}</div>`;
-    }
-    pane.querySelectorAll(".pn-pin").forEach((img) => {
-      img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
-      img.addEventListener("click", () => api.openPin(img.dataset.link));
-    });
+    inst.slide = 0;
+    const first = r.pins[0];
+    pane.__html = null;
+    pane.innerHTML = `<img class="pn-photo" draggable="false" alt="${esc(first.title)}" data-link="${esc(first.link)}">
+      <img class="pn-photo" draggable="false" alt="">
+      <div class="pn-shade"></div><div class="pn-head">${PIN_BADGE}</div>`;
+    const img = pane.querySelector(".pn-photo");
+    img.onload = () => img.classList.add("on");
+    img.src = first.img;
   },
 };
 async function loadPins() {
