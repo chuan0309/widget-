@@ -378,7 +378,7 @@ function hourLabel(h) {
 }
 // 溫度條的顏色：冷的偏藍綠、熱的偏橘紅（像 Apple 天氣）
 function tempColor(t) {
-  const stops = [[5, "#64d2ff"], [14, "#8fd6a5"], [20, "#d6dd6b"], [25, "#ffd60a"], [30, "#ff9f0a"], [35, "#ff453a"]];
+  const stops = [[4, "#64c8f0"], [9, "#6fd0c8"], [13, "#8ed4a8"], [17, "#b3d777"], [21, "#e3d44e"], [25, "#f6bd3c"], [30, "#f58a3b"], [35, "#ff453a"]];
   for (const [v, c] of stops) if (t <= v) return c;
   return "#ff453a";
 }
@@ -391,7 +391,12 @@ function skyClass(code, isDay) {
   if (code <= 77 || code === 85 || code === 86) return "sky-snow";
   return "sky-storm";
 }
-const wIcon = (code) => { const [, name, color] = weatherLook(code); return `<span style="color:${color}">${icon(name)}</span>`; };
+// 晚上的晴天／少雲換成月亮
+const wIcon = (code, night = false) => {
+  const [, name, color] = weatherLook(code);
+  if (night && code <= 2) return `<span style="color:#fff">${icon("clear_night")}</span>`;
+  return `<span style="color:${color}">${icon(name)}</span>`;
+};
 
 let weatherAt = 0;
 async function loadWeather(force = false) {
@@ -402,8 +407,8 @@ async function loadWeather(force = false) {
   store.city = city;
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
-      "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code" +
-      "&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=6";
+      "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day" +
+      "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=6";
     store.weather = await (await fetch(url)).json();
     store.weatherError = false;
   } catch {
@@ -425,7 +430,8 @@ WIDGETS.weather = {
       return;
     }
     const cur = data.current;
-    const [desc, iconName, color] = weatherLook(cur.weather_code);
+    let [desc, iconName, color] = weatherLook(cur.weather_code);
+    if (cur.is_day === 0 && cur.weather_code <= 2) { iconName = "clear_night"; color = "#fff"; if (cur.weather_code === 0) desc = "晴朗"; }
     pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
     const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
@@ -439,17 +445,23 @@ WIDGETS.weather = {
     const hours = data.hourly.time.slice(nowIdx, nowIdx + 5).map((t, i) => {
       const k = nowIdx + i;
       return `<div class="wt-hour"><small>${i === 0 ? "現在" : hourLabel(new Date(t).getHours())}</small>
-        ${wIcon(data.hourly.weather_code[k])}<span>${Math.round(data.hourly.temperature_2m[k])}°</span></div>`;
+        ${wIcon(data.hourly.weather_code[k], data.hourly.is_day?.[k] === 0)}<span>${Math.round(data.hourly.temperature_2m[k])}°</span></div>`;
     }).join("");
     let days = "";
     if (inst.size === "l") {
       const min = Math.min(...data.daily.temperature_2m_min), max = Math.max(...data.daily.temperature_2m_max);
       days = `<div class="wt-days">${data.daily.time.slice(0, 5).map((t, i) => {
         const a = data.daily.temperature_2m_min[i], b = data.daily.temperature_2m_max[i];
-        const left = ((a - min) / (max - min || 1)) * 100, width = ((b - a) / (max - min || 1)) * 100;
+        const pos = (v) => ((v - min) / (max - min || 1)) * 100;
+        const left = pos(a), width = pos(b) - pos(a);
+        // 今天：白點標出現在幾度（跟 iPhone 一樣）
+        const dot = i === 0 ? `<b class="wt-now" style="left:${Math.min(100, Math.max(0, pos(cur.temperature_2m)))}%"></b>` : "";
+        const rain = data.daily.precipitation_probability_max?.[i];
+        const rainTag = rain >= 30 ? `<small class="wt-rain">${rain}%</small>` : "";
+        const night = i === 0 && cur.is_day === 0;
         return `<div class="wt-day"><span>${i === 0 ? "今天" : "週" + WEEK_SHORT[new Date(t).getDay()]}</span>
-          ${wIcon(data.daily.weather_code[i])}<span class="lo">${Math.round(a)}°</span>
-          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%;background:linear-gradient(90deg,${tempColor(a)},${tempColor(b)})"></i></span><span>${Math.round(b)}°</span></div>`;
+          <span class="wt-dicon">${wIcon(data.daily.weather_code[i], night)}${rainTag}</span><span class="lo">${Math.round(a)}°</span>
+          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%;background:linear-gradient(90deg,${tempColor(a)},${tempColor(b)})"></i>${dot}</span><span class="hi">${Math.round(b)}°</span></div>`;
       }).join("")}</div>`;
     }
     setHTML(pane, `<div class="wt">

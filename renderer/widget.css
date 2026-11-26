@@ -72,11 +72,23 @@
 .wt-hour svg { width: 22px; height: 22px; fill: currentColor; }
 .size-m .wt-temp { font-size: 40px; }
 .size-l .wt-hours { margin-top: 12px; padding-bottom: 10px; border-bottom: 0.5px solid rgb(var(--fg) / 0.25); }
-.wt-days { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
-.wt-day { display: grid; grid-template-columns: 44px 26px 30px 1fr 30px; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.wt-days { margin-top: 2px; display: flex; flex-direction: column; }
+/* 像 iPhone 天氣：每天一行、中間細線、最低溫淡色、溫度條在深色軌道上 */
+.wt-day {
+  display: grid; grid-template-columns: 40px 30px 32px 1fr 32px; align-items: center; gap: 8px;
+  height: 31px; font-size: 14px; font-weight: 600;
+}
+.wt-day + .wt-day { border-top: 0.5px solid rgb(var(--fg) / 0.18); }
+.wt-dicon { display: flex; flex-direction: column; align-items: center; line-height: 1; }
 .wt-day svg { width: 20px; height: 20px; fill: currentColor; }
-.wt-day .lo { color: var(--ink-soft); text-align: right; }
-.wt-bar { height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.18); position: relative; }
+.wt-rain { font-size: 10px; font-weight: 700; color: #64d2ff; margin-top: -1px; }
+.wt-day .lo { color: rgb(var(--fg) / 0.5); text-align: right; }
+.wt-day .hi { text-align: right; }
+.wt-bar { height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.22); position: relative; }
+.wt-now {
+  position: absolute; top: 50%; width: 7px; height: 7px; translate: -50% -50%; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 1.5px rgba(30, 40, 70, 0.8);
+}
 .wt-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 
 /* ───────── 電量 ───────── */
