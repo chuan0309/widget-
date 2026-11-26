@@ -179,13 +179,20 @@
 .batt-row small { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 500; }
 .batt-row .pct { font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .batt-row .pct.low { color: #ff453a; }
-/* 充電中：圓環變綠、右下角一個閃電（像 iPhone 的電池小組件） */
+/* 充電中：跟 iPhone「電池」小組件一樣——圓環變綠，閃電放在圓環正上方，
+   圓環在閃電那裡挖一個缺口（不是另外加一個圓形徽章） */
 .ring.charging { --ring-color: var(--ok); }
+.ring.charging::before {
+  -webkit-mask:
+    radial-gradient(closest-side, transparent 84%, #000 86%),
+    radial-gradient(circle at 50% 4%, transparent calc(var(--size) * 0.17), #000 calc(var(--size) * 0.17 + 0.5px));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
 .ring svg.bolt {
-  position: absolute; right: -3px; bottom: -3px;
-  width: 15px; height: 15px; padding: 2px 3px; box-sizing: border-box;
-  border-radius: 50%; background: var(--ok); fill: #fff; stroke: none;
-  box-shadow: 0 0 0 1.5px rgba(20, 22, 28, 0.6);
+  position: absolute; left: 50%; top: 4%; translate: -50% -50%;
+  width: calc(var(--size) * 0.2); height: calc(var(--size) * 0.3);
+  fill: var(--ink); stroke: none;
 }
 .dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; z-index: 1; }
 .dots i { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--fg) / 0.35); transition: background 0.3s; }
