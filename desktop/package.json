@@ -16,7 +16,7 @@
   "build": {
     "appId": "local.glasswidgets.app",
     "productName": "Glass Widgets",
-    "files": ["main.js", "preload.js", "bt-watch.ps1", "renderer/**", "assets/**"],
+    "files": ["main.js", "preload.js", "pinterest-api.js", "bt-watch.ps1", "renderer/**", "assets/**"],
     "asarUnpack": ["bt-watch.ps1"],
     "win": {
       "target": ["nsis", "portable"],

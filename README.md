@@ -36,13 +36,37 @@ npm run dist
   - 切換玻璃效果：「毛玻璃」會真的模糊後面的桌布；「透明圓角」不模糊但是 iOS 那種大圓角
   - 開機自動啟動
   - 開啟設定檔：改天氣的城市（`city` 的 `name`、`lat` 緯度、`lon` 經度）
-- **Pinterest 小組件**：第一次會請你貼網址
-  - 貼個人頁（`pinterest.com/你的帳號/`）→ 顯示你最新的 pin
-  - 貼某個圖版（`pinterest.com/你的帳號/圖版名稱/`）→ 只顯示那個圖版
+- **Pinterest 小組件**：第一次會問你要「登入我的 Pinterest」還是「用公開網址」
   - 圖片會像滑 Pinterest 一樣慢慢往上捲，滑鼠移上去會停，點圖片會用瀏覽器打開那個 pin
-  - 想換圖版：滑鼠移到小組件上，按右上角的 ↻
-  - 只能顯示**公開**的帳號/圖版（用的是 Pinterest 公開的 RSS，不用登入）
+  - 想換圖版或登出：滑鼠移到小組件上，按右上角的 ↻
+  - 詳細設定見下面「Pinterest 怎麼設定」
 - 藍牙裝置**連上電腦**時會自動跳通知，電量小組件也會顯示它的電量（要裝置本身有回報電量給 Windows 才看得到 %）
+
+### Pinterest 怎麼設定
+
+**方法 A：登入帳號（官方 API，可以看私密圖版）**
+
+Pinterest 規定要用官方 API，得先申請一個「開發者 App」，只要做一次：
+
+1. 你的 Pinterest 帳號要是**商業帳號**（免費，在 Pinterest 設定裡可以把個人帳號轉成商業帳號）
+2. 到 [developers.pinterest.com](https://developers.pinterest.com/) 登入 → My apps → 建立 App，申請 **Trial access**
+3. 等 Pinterest 審核（會寄 email 通知）
+4. 審核過後，在 App 的設定頁：
+   - 找到 **App ID** 和 **App secret**
+   - 在 **Redirect URIs** 加上 `http://localhost:8085/`（要一字不差，包含最後的 `/`）
+5. 回到桌面的 Pinterest 小組件 → 登入我的 Pinterest → 貼上 App ID、App secret → 到瀏覽器按「允許」
+6. 選一個圖版（有鎖頭的是私密圖版），或選「我存的所有 pin」
+
+登入一次之後會自動續期，只要 60 天內有開過程式就不用重新登入。App secret 和登入資料都用 Windows 內建的加密存起來。
+
+> 注意：Pinterest 官方 API **沒有「首頁推薦」**，只能讀你自己的圖版和 pin。
+> 另外 Pinterest 文件有寫：2026/9/14 之後建立的 App，讀「非商業帳號」的資料可能會被擋（錯誤代碼 `PINNER_DATA_ACCESS_DENIED`），這也是為什麼第 1 步要用商業帳號。
+
+**方法 B：公開網址（不用登入，最快）**
+
+- 貼個人頁（`pinterest.com/你的帳號/`）→ 顯示你最新的 pin
+- 貼某個圖版（`pinterest.com/你的帳號/圖版名稱/`）→ 只顯示那個圖版
+- 只能看公開的，而且只會顯示最新約 25 張
 
 ### 已知限制
 

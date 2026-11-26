@@ -2,6 +2,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImag
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const { createPinterestApi } = require("./pinterest-api");
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
@@ -10,7 +11,8 @@ const DEFAULTS = {
   widgets: { clock: true, weather: true, battery: true, pinterest: true },
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
-  pinterest: { feed: "" }, // 例如 https://www.pinterest.com/帳號/圖版.rss
+  // mode "rss"：讀公開網址；mode "api"：登入帳號（官方 API）
+  pinterest: { mode: "rss", feed: "" },
 };
 function loadSettings() {
   try {
@@ -271,7 +273,7 @@ const decodeXML = (s = "") => s
   .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
   .replace(/&amp;/g, "&");
 
-async function fetchPins() {
+async function fetchPinsRss() {
   const feed = settings.pinterest.feed;
   if (!feed) return { needSetup: true };
   try {
@@ -296,15 +298,40 @@ async function fetchPins() {
   }
 }
 
+const pinApi = createPinterestApi({ settings, save: saveSettings });
+
+async function fetchPins() {
+  if (settings.pinterest.mode !== "api") return fetchPinsRss();
+  try {
+    return await pinApi.fetchPins();
+  } catch (e) {
+    return { error: e.message, loginExpired: !!e.loginExpired, accessDenied: !!e.accessDenied };
+  }
+}
+
 ipcMain.handle("pins:get", fetchPins);
+ipcMain.handle("pins:status", () => ({
+  loggedIn: pinApi.isLoggedIn(),
+  username: settings.pinterest.username || "",
+  clientId: settings.pinterest.clientId || "",
+  source: settings.pinterest.source || null,
+  redirectUri: pinApi.REDIRECT_URI,
+}));
+ipcMain.handle("pins:login", (_e, { clientId, clientSecret }) => pinApi.login(clientId, clientSecret));
+ipcMain.handle("pins:boards", async () => {
+  try { return { boards: await pinApi.listBoards() }; }
+  catch (e) { return { error: e.message, loginExpired: !!e.loginExpired, accessDenied: !!e.accessDenied }; }
+});
+ipcMain.handle("pins:choose", (_e, source) => { pinApi.chooseSource(source); return fetchPins(); });
+ipcMain.on("pins:logout", () => pinApi.logout());
 ipcMain.handle("pins:set", async (_e, input) => {
   const feed = pinterestFeedFrom(input);
   if (!feed) return { needSetup: true, error: "請貼 Pinterest 的個人頁或圖版網址" };
   const prev = settings.pinterest.feed;
   settings.pinterest.feed = feed;
-  const result = await fetchPins();
+  const result = await fetchPinsRss();
   if (result.error) settings.pinterest.feed = prev; // 抓不到就不要存
-  else saveSettings();
+  else { settings.pinterest.mode = "rss"; saveSettings(); }
   return result.error ? { ...result, needSetup: true } : result;
 });
 ipcMain.on("pins:reset", () => {

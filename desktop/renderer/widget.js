@@ -113,6 +113,8 @@ if (kind === "battery") initBattery();
 /* ───────── Pinterest ───────── */
 const pnCard = document.querySelector(".pinterest");
 let hasPins = false;
+const PIN_SVG = '<svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7"/></svg>';
+const LOCK_SVG = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
 function pinElement(pin) {
   const img = document.createElement("img");
@@ -127,7 +129,7 @@ function pinElement(pin) {
 }
 
 function renderPins({ title, pins }) {
-  $("pnTitle").textContent = title;
+  $("pnTitle").textContent = title || "Pinterest";
   const cols = [[], []];
   pins.forEach((p, i) => cols[i % 2].push(p));
   [$("pnColA"), $("pnColB")].forEach((col, i) => {
@@ -139,11 +141,25 @@ function renderPins({ title, pins }) {
   hasPins = true;
 }
 
-function showSetup(error = "") {
+function clearPins() {
+  $("pnColA").replaceChildren();
+  $("pnColB").replaceChildren();
+  $("pnTitle").textContent = "Pinterest";
+  hasPins = false;
+}
+
+/* 設定面板裡切換畫面 */
+function showView(name, error = "") {
   pnCard.classList.add("setup");
   $("pnSetup").hidden = false;
-  $("pnError").textContent = error;
-  $("pnInput").focus();
+  showMsg("");
+  for (const v of document.querySelectorAll(".pn-view")) {
+    const on = v.dataset.view === name;
+    v.classList.toggle("on", on);
+    const err = v.querySelector("[data-error]");
+    if (err) err.textContent = on ? error : "";
+  }
+  document.querySelector(`.pn-view[data-view="${name}"] input`)?.focus();
 }
 function hideSetup() {
   pnCard.classList.remove("setup");
@@ -155,28 +171,95 @@ function showMsg(text) {
 }
 
 function applyPins(result) {
-  if (result.needSetup) return showSetup(result.error);
+  if (result.needSetup) return showView("choice");
+  if (result.needBoard) return openBoards();
+  if (result.loginExpired) return showView("login", result.error);
   hideSetup();
   if (result.pins) { renderPins(result); showMsg(""); }
   else if (result.error) { if (result.title) $("pnTitle").textContent = result.title; showMsg(result.error); }
 }
 
-async function initPinterest() {
-  applyPins(await window.api.getPins());
-  setInterval(async () => { if (!pnCard.classList.contains("setup")) applyPins(await window.api.getPins()); }, 30 * 60 * 1000);
+/* 選圖版 */
+async function openBoards() {
+  showView("boards");
+  const list = $("pnBoards");
+  list.innerHTML = '<small style="padding:10px">讀取中…</small>';
+  const status = await window.api.pinterestStatus();
+  $("pnUser").textContent = status.username ? `@${status.username}` : "";
+  const res = await window.api.pinterestBoards();
+  if (res.error) {
+    list.replaceChildren();
+    return res.loginExpired ? showView("login", res.error) : showView("boards", res.error);
+  }
+  const current = status.source?.id;
+  const items = [{ id: "all", name: "我存的所有 pin", count: null, cover: "", all: true }, ...res.boards];
+  list.replaceChildren(...items.map((b) => {
+    const row = document.createElement("button");
+    row.className = "pn-board" + (b.id === current ? " on" : "");
+    const thumb = document.createElement("span");
+    thumb.className = "pn-thumb";
+    if (b.cover) thumb.style.backgroundImage = `url("${encodeURI(b.cover)}")`;
+    else thumb.innerHTML = PIN_SVG;
+    const name = document.createElement("span");
+    name.className = "pn-board-name";
+    name.textContent = b.name;
+    const meta = document.createElement("span");
+    meta.className = "pn-board-meta";
+    meta.innerHTML = (b.secret ? LOCK_SVG : "") + (b.count != null ? `<span>${Number(b.count)}</span>` : "");
+    row.append(thumb, name, meta);
+    row.addEventListener("click", async () => {
+      list.querySelectorAll(".pn-board").forEach((r) => r.classList.toggle("on", r === row));
+      applyPins(await window.api.pinterestChoose({ id: b.id, name: b.name }));
+    });
+    return row;
+  }));
+}
 
-  $("pnSetup").addEventListener("submit", async (e) => {
+async function initPinterest() {
+  const status = await window.api.pinterestStatus();
+  $("pnAppId").value = status.clientId;
+  $("pnRedirect").textContent = status.redirectUri;
+
+  applyPins(await window.api.getPins());
+  setInterval(async () => {
+    if (!pnCard.classList.contains("setup")) applyPins(await window.api.getPins());
+  }, 30 * 60 * 1000);
+
+  document.querySelectorAll("[data-go]").forEach((b) =>
+    b.addEventListener("click", () => showView(b.dataset.go)));
+
+  // 公開網址
+  $("pnRssForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    $("pnSave").disabled = true;
-    $("pnSave").textContent = "讀取中…";
+    const btn = e.target.querySelector(".pn-btn");
+    btn.disabled = true; btn.textContent = "讀取中…";
     const result = await window.api.setPinterest($("pnInput").value);
-    $("pnSave").disabled = false;
-    $("pnSave").textContent = "完成";
-    applyPins(result);
+    btn.disabled = false; btn.textContent = "完成";
+    if (result.needSetup) showView("rss", result.error);
+    else applyPins(result);
   });
-  $("pnGear").addEventListener("click", () => {
-    if (pnCard.classList.contains("setup") && hasPins) hideSetup();
-    else showSetup();
+
+  // 官方 API 登入
+  $("pnLoginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showView("wait");
+    const res = await window.api.pinterestLogin($("pnAppId").value, $("pnSecret").value);
+    $("pnSecret").value = "";
+    if (res.ok) openBoards();
+    else showView("login", res.error);
+  });
+
+  $("pnLogout").addEventListener("click", () => {
+    window.api.pinterestLogout();
+    clearPins();
+    showView("choice");
+  });
+
+  $("pnGear").addEventListener("click", async () => {
+    if (pnCard.classList.contains("setup") && hasPins) return hideSetup();
+    const st = await window.api.pinterestStatus();
+    if (st.loggedIn) openBoards();
+    else showView("choice");
   });
 }
 if (kind === "pinterest") initPinterest();

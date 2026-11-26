@@ -10,4 +10,9 @@ contextBridge.exposeInMainWorld("api", {
   setPinterest: (url) => ipcRenderer.invoke("pins:set", url),
   resetPinterest: () => ipcRenderer.send("pins:reset"),
   openPin: (link) => ipcRenderer.send("open-pin", link),
+  pinterestStatus: () => ipcRenderer.invoke("pins:status"),
+  pinterestLogin: (clientId, clientSecret) => ipcRenderer.invoke("pins:login", { clientId, clientSecret }),
+  pinterestBoards: () => ipcRenderer.invoke("pins:boards"),
+  pinterestChoose: (source) => ipcRenderer.invoke("pins:choose", source),
+  pinterestLogout: () => ipcRenderer.send("pins:logout"),
 });

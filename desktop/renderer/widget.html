@@ -48,13 +48,53 @@
       <div class="pn-col" id="pnColB"></div>
     </div>
 
-    <form class="pn-setup" id="pnSetup" hidden>
-      <p>貼上你的 Pinterest 網址</p>
-      <small>個人頁或某個圖版都可以</small>
-      <input id="pnInput" placeholder="pinterest.com/帳號/圖版" spellcheck="false" />
-      <span class="pn-error" id="pnError"></span>
-      <button type="submit" id="pnSave">完成</button>
-    </form>
+    <!-- 設定面板：好幾個畫面輪流顯示 -->
+    <div class="pn-setup" id="pnSetup" hidden>
+      <!-- 選擇方式 -->
+      <div class="pn-view" data-view="choice">
+        <p>要顯示哪裡的圖？</p>
+        <button class="pn-btn" data-go="login">登入我的 Pinterest</button>
+        <button class="pn-btn ghost" data-go="rss">用公開網址</button>
+      </div>
+
+      <!-- 公開網址 -->
+      <form class="pn-view" data-view="rss" id="pnRssForm">
+        <p>貼上 Pinterest 網址</p>
+        <small>個人頁或某個圖版都可以（要公開的）</small>
+        <input id="pnInput" placeholder="pinterest.com/帳號/圖版" spellcheck="false" />
+        <span class="pn-error" data-error></span>
+        <button class="pn-btn" type="submit">完成</button>
+        <button class="pn-link" type="button" data-go="choice">← 返回</button>
+      </form>
+
+      <!-- 官方 API 登入 -->
+      <form class="pn-view" data-view="login" id="pnLoginForm">
+        <p>登入 Pinterest</p>
+        <small>填你在 developers.pinterest.com 建的 App 資料</small>
+        <input id="pnAppId" placeholder="App ID" spellcheck="false" inputmode="numeric" />
+        <input id="pnSecret" placeholder="App secret" type="password" spellcheck="false" />
+        <small class="pn-hint">App 的 Redirect URI 要填 <code id="pnRedirect">http://localhost:8085/</code></small>
+        <span class="pn-error" data-error></span>
+        <button class="pn-btn" type="submit">到瀏覽器登入</button>
+        <button class="pn-link" type="button" data-go="choice">← 返回</button>
+      </form>
+
+      <!-- 等瀏覽器 -->
+      <div class="pn-view" data-view="wait">
+        <span class="pn-spinner"></span>
+        <p>請在瀏覽器按「允許」</p>
+        <small>完成後會自動回到這裡</small>
+        <button class="pn-link" type="button" data-go="login">取消</button>
+      </div>
+
+      <!-- 選圖版 -->
+      <div class="pn-view boards" data-view="boards">
+        <div class="pn-boards-head"><p>選一個圖版</p><small id="pnUser"></small></div>
+        <div class="pn-boards" id="pnBoards"></div>
+        <span class="pn-error" data-error></span>
+        <button class="pn-link" type="button" id="pnLogout">登出</button>
+      </div>
+    </div>
 
     <div class="pn-msg" id="pnMsg" hidden></div>
   </div>
