@@ -113,7 +113,6 @@
           <div class="row"><span class="row-text"><b>狀態</b><small id="phStatus"></small></span></div>
           <div class="row"><span class="row-text"><b>接上充電器時的網址</b><small class="mono" id="phPlug"></small></span><button class="btn small" data-copy="phPlug">複製</button></div>
           <div class="row"><span class="row-text"><b>拔掉充電器時的網址</b><small class="mono" id="phUnplug"></small></span><button class="btn small" data-copy="phUnplug">複製</button></div>
-          <div class="row"><span class="row-text"><b>Apple Watch 用的網址</b><small class="mono" id="phWatch"></small></span><button class="btn small" data-copy="phWatch">複製</button></div>
           <div class="row"><span class="row-text"><b>換一組密碼</b><small>網址外流的話按這個，iPhone 上的網址也要跟著換</small></span><button class="btn small" id="phToken">換密碼</button></div>
         </div>
       </div>
@@ -124,7 +123,6 @@
         <li>把上面「接上充電器時的網址」貼到 URL 欄，然後在網址最後面點一下，插入變數「電池電量」（網址最後是 level= 加上電池電量）。</li>
         <li>再做一個一樣的自動化，但是選「已中斷連接」，網址貼「拔掉充電器時的網址」。</li>
         <li>完成！插上充電線，電量小組件馬上就會出現閃電。</li>
-        <li><b>Apple Watch（選用）</b>：手錶沒辦法自動傳，要在手錶上點一下。iPhone「捷徑」新增一個捷徑：「取得電池電量」→「取得 URL 內容」，網址貼「Apple Watch 用的網址」並在最後插入「電池電量」；捷徑設定裡打開「在 Apple Watch 上顯示」。之後把它放到錶面的複雜功能，想更新時點一下就好（電腦和手錶要在同一個 Wi-Fi，或手錶在 iPhone 旁邊）。</li>
       </ol>
 
       <h2>已配對的裝置</h2>
