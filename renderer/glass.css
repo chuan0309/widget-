@@ -1,3 +1,10 @@
+/* Inter：開源字型（SIL OFL），照 Apple SF 的風格設計，數字跟 iPhone 很像 */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: block;
+}
 :root {
   /* 字和線的顏色（淺色背景時換成黑色） */
   --fg: 255 255 255;
@@ -14,7 +21,7 @@ html, body {
   overflow: hidden;
   color: var(--ink);
   /* Windows 11 的 Segoe UI Variable 是最接近 Apple SF 的系統字型 */
-  font-family: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
   letter-spacing: -0.01em;
   font-feature-settings: "tnum"; /* 數字等寬，跳動時不會左右晃 */
   -webkit-font-smoothing: antialiased;

@@ -335,7 +335,7 @@ const WIDGETS = {};
 // 錶面（白天白色、晚上深色），中、小時鐘和世界時鐘共用
 const faceHTML = () => `<div class="analog">${Array.from({ length: 12 }, (_, i) => {
   const a = ((i + 1) * 30 - 90) * Math.PI / 180;
-  return `<span class="num" style="left:${50 + 33.5 * Math.cos(a)}%;top:${50 + 33.5 * Math.sin(a)}%">${i + 1}</span>`;
+  return `<span class="num" style="left:${50 + 36 * Math.cos(a)}%;top:${50 + 36 * Math.sin(a)}%">${i + 1}</span>`;
 }).join("")}<i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>`;
 function setHands(face, h, m, s) {
   const [hh, mm, ss] = face.__hands ||= [".hand.h", ".hand.m", ".hand.s"].map((q) => face.querySelector(q));
