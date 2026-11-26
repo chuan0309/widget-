@@ -352,12 +352,14 @@ function rebuildWidgets() {
 // 疊放改了：重新排版就好
 function syncStacks() {
   sendLayout();
+  syncPods();
 }
 function removeStack(key) {
   settings.stacks = (settings.stacks || []).filter((st) => `stack:${st.id}` !== key);
   delete settings.positions[key];
   saveSettings();
   sendLayout();
+  syncPods();
 }
 
 function showAllWidgets() {
@@ -467,7 +469,7 @@ function startHelper() {
   helper.on("exit", (code) => {
     log("helper exit", code);
     helper = null;
-    if (!app.isQuitting) setTimeout(() => { startHelper(); if (hostWin) pinToDesktop(hostWin); }, 5000); // 掛掉就重開
+    if (!app.isQuitting) setTimeout(() => { startHelper(); syncPods(); if (hostWin) pinToDesktop(hostWin); }, 5000); // 掛掉就重開
   });
 }
 
@@ -653,6 +655,12 @@ function openManager(section) {
 function setWidgetEnabled(kind, on) {
   settings.widgets[kind] = on;
   sendLayout();
+  syncPods();
+}
+// AirPods 廣播監聽只在電量小組件有顯示時開著（沒顯示就不用一直收藍牙廣播）
+function syncPods() {
+  const shown = settings.widgets.battery || (settings.stacks || []).some((st) => st.items.includes("battery"));
+  helperSend(`pods ${shown ? "on" : "off"}`);
 }
 
 function managerState() {
@@ -1068,6 +1076,7 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("click", () => openManager());
     buildTrayMenu();
     startHelper();
+    syncPods();
     phonePush.apply();
     createHost();
     refreshWallpaper(true);

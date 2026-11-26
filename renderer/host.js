@@ -631,12 +631,12 @@ function chargingGuess(id, level) {
 }
 function batteryList() {
   const list = [];
-  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging, sub: "" });
+  if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging });
   for (const d of store.devices.filter((d) => d.connected)) {
     // iPhone 捷徑有傳充電狀態就用那個（即時），不然用「電量有沒有變多」來猜
     const guess = chargingGuess(d.id, d.battery);
     const charging = typeof d.charging === "boolean" ? d.charging : guess;
-    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : d.detail || "" }); // 充電中只看閃電，跟 iPhone 一樣不另外寫字
+    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging });
   }
   // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面
   const order = store.batteryPrefs.order || [];
@@ -650,7 +650,7 @@ const ringHTML = (it) => {
 };
 
 // 一頁放幾台：中 4 台；大的照實際放得下的數量（最多 6 台）
-const battPer = (inst) => inst.size === "l" ? (inst.battFit || 6) : 4;
+const battPer = (inst) => inst.size === "l" ? 6 : 4;
 
 WIDGETS.battery = {
   mount(pane, inst) {
@@ -669,7 +669,6 @@ WIDGETS.battery = {
       setHTML(pane, `<div class="setup-msg"><span class="ring unknown" style="--p:0;--size:46px">${icon("other")}</span><small>沒有連線中的藍牙裝置</small></div>`);
       return;
     }
-    if (inst.battLen !== list.length) { inst.battLen = list.length; inst.battFit = 0; }
     const per = battPer(inst);
     const pages = Math.ceil(list.length / per);
     if (inst.battPage >= pages) inst.battPage = 0;
@@ -686,12 +685,6 @@ WIDGETS.battery = {
           <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
     setHTML(pane, `<div class="batt" style="--rows:${per}">${body}</div>${dots}`);
-    // 大尺寸：先試一頁放 6 台，名字太長換行放不下時才少放一台
-    const box = pane.firstElementChild;
-    if (inst.size === "l" && box.scrollHeight > box.clientHeight + 1 && per > 3) {
-      inst.battFit = per - 1;
-      WIDGETS.battery.render(pane, inst);
-    }
   },
 };
 

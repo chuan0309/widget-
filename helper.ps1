@@ -477,9 +477,8 @@ try {
   $podsWatcher = New-Object Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher
   $podsWatcher.ScanningMode = [Windows.Devices.Bluetooth.Advertisement.BluetoothLEScanningMode]::Passive
   $null = Register-ObjectEvent -InputObject $podsWatcher -EventName Received -SourceIdentifier 'pods-adv'
-  $podsWatcher.Start()
-  $podsReady = $true
-  [Console]::Error.WriteLine("pods watcher started")
+  $podsReady = $true   # main.js sends "pods on" only while the battery widget is shown (saves CPU otherwise)
+  [Console]::Error.WriteLine("pods watcher ready")
 } catch { [Console]::Error.WriteLine("pods watcher failed: $($_.Exception.Message)") }
 
 # Model id (bytes 3-4 of the packet) → name; unknown ids still work, just named "AirPods"
@@ -506,8 +505,20 @@ function Read-PodsPacket($bytes, [int]$rssi) {
 }
 
 $podsRetry = [datetime]::MinValue
-function Update-Pods {
+$podsWanted = $false
+function Set-Pods([bool]$on) {
+  if ($on -eq $script:podsWanted) { return }
+  $script:podsWanted = $on
   if (-not $podsReady) { return }
+  try {
+    if ($on) { $podsWatcher.Start() } else {
+      $podsWatcher.Stop()
+      Get-Event -SourceIdentifier 'pods-adv' -ErrorAction SilentlyContinue | Remove-Event -ErrorAction SilentlyContinue
+    }
+  } catch {}
+}
+function Update-Pods {
+  if (-not $podsReady -or -not $podsWanted) { return }
   # Bluetooth turned off and on again → the watcher stops ("Aborted"); start it again
   if ($podsWatcher.Status -eq [Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcherStatus]::Aborted -and (Get-Date) -ge $script:podsRetry) {
     $script:podsRetry = (Get-Date).AddSeconds(30)
@@ -544,6 +555,8 @@ while ($true) {
   while (($line = [StdinPump]::Next()) -ne $null) {
     if ($line -match '^pin (\d+)$') {
       try { [DesktopPin]::Pin([long]$Matches[1]) } catch {}
+    } elseif ($line -match '^pods (on|off)$') {
+      Set-Pods ($Matches[1] -eq 'on')
     } elseif ($line -match '^audio-set (.+)$') {
       try { $null = [GlassWidgets.Audio]::SetDefault($Matches[1].Trim()) } catch {}
       $due.audio = [datetime]::MinValue   # report the new default right away
