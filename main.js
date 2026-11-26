@@ -545,22 +545,17 @@ function handlePods(p) {
   pods = { ...p, at: Date.now() };
   if (!firstSnapshot) evaluateDevices(); // 藍牙清單第一次到之前先不算（不然開程式時會亂跳連線通知）
 }
-function podsDevice(now, list) {
-  if (!pods || now - pods.at > PODS_SHOW_MS) return null;
+// 跟 iPhone 一樣分兩列：耳機（左右耳比較低的那個）、充電盒
+function podsDevices(now, list) {
+  if (!pods || now - pods.at > PODS_SHOW_MS) return [];
   // AirPods 真的連在這台電腦上、而且 Windows 讀得到電量，就用那個，不重複顯示
-  if (list.some((d) => d.connected && d.battery != null && /airpods/i.test(d.name))) return null;
+  if (list.some((d) => d.connected && d.battery != null && /airpods/i.test(d.name))) return [];
   const buds = [pods.left, pods.right].filter((v) => v != null);
-  if (!buds.length) return null;
-  const pct = (v) => (v == null ? "—" : v + "%");
-  const mins = Math.round((now - pods.at) / 60000);
-  const parts = [`左 ${pct(pods.left)}`, `右 ${pct(pods.right)}`];
-  if (pods.case != null) parts.push(`盒 ${pct(pods.case)}`);
-  return {
-    id: "airpods-adv", name: pods.name, connected: true, passive: true, cod: null, le: true,
-    battery: Math.min(...buds),
-    charging: !!(pods.chargeLeft || pods.chargeRight),
-    detail: parts.join(" · ") + (mins >= 2 ? `（${mins} 分鐘前）` : ""),
-  };
+  const out = [];
+  const base = { connected: true, passive: true, cod: null, le: true };
+  if (buds.length) out.push({ ...base, id: "airpods-adv", name: pods.name, battery: Math.min(...buds), charging: !!(pods.chargeLeft || pods.chargeRight) });
+  if (pods.case != null) out.push({ ...base, id: "airpods-adv-case", name: pods.name + " 充電盒", battery: pods.case, charging: !!pods.chargeCase });
+  return out;
 }
 
 function handleDevices(raw) {
@@ -584,8 +579,7 @@ function evaluateDevices() {
     }
     return out;
   });
-  const pd = podsDevice(now, next);
-  if (pd) next.push(pd);
+  next.push(...podsDevices(now, next));
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;

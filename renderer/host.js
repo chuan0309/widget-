@@ -674,10 +674,14 @@ WIDGETS.battery = {
     const pages = Math.ceil(list.length / per);
     if (inst.battPage >= pages) inst.battPage = 0;
     const show = list.slice(inst.battPage * per, (inst.battPage + 1) * per);
+    // 大：跟 iPhone／Mac 的「電池」大組件一樣——圖示、名稱（一行，太長用…）、百分比、橫的電池圖；
+    // 固定 6 列，沒裝置的列也留著分隔線
+    const glyph = (it) => it.battery == null ? "" : `<span class="bglyph ${it.charging ? "charging" : it.battery <= 20 ? "low" : ""}"><i style="width:${Math.max(6, it.battery)}%"></i>${it.charging ? `<svg viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : ""}</span>`;
     const body = inst.size === "l"
-      ? show.map((it) => `<div class="batt-row">${ringHTML(it)}
-          <div><b>${esc(it.name)}</b>${it.sub ? `<small>${it.sub}</small>` : ""}</div>
-          <span class="pct ${it.battery != null && it.battery <= 20 ? "low" : ""}">${it.battery != null ? it.battery + "%" : ""}</span></div>`).join("")
+      ? show.map((it) => `<div class="batt-row" title="${esc(it.name)}"><span class="bicon">${deviceIcon(it.type)}</span>
+          <b>${esc(it.name)}</b>
+          <span class="pct ${it.battery == null ? "none" : ""}">${it.battery != null ? it.battery + "%" : "已連線"}</span>${glyph(it)}</div>`).join("")
+        + `<div class="batt-row empty"></div>`.repeat(Math.max(0, per - show.length))
       : show.map((it) => `<div class="batt-item" title="${esc(it.name)}">${ringHTML(it)}
           <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
