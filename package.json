@@ -23,6 +23,7 @@
       "wallpaper.js",
       "calendar.js",
       "google.js",
+      "cwa.js",
       "oauth.json",
       "helper.ps1",
       "locate.ps1",

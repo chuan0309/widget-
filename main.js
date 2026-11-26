@@ -8,6 +8,7 @@ const wallpaper = require("./wallpaper");
 const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
+const { createCwa } = require("./cwa");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
 // 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
@@ -61,6 +62,8 @@ const DEFAULTS = {
   calendar: { sources: [] }, // Google 日曆的 iCal 私人網址（加密存）
   batteryWidget: { hidden: {}, order: [] }, // 電量小組件：哪些裝置不要顯示、排列順序
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
+  weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
+  cwa: { key: "" },
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
@@ -610,6 +613,8 @@ function managerState() {
     devices,
     autostart: app.getLoginItemSettings().openAtLogin,
     desktopLayer: settings.desktopLayer !== false,
+    weatherSource: settings.weatherSource || "openmeteo",
+    cwaHasKey: cwa.hasKey(),
     locate: locateInfo,
     version: app.getVersion(),
     isWin11: IS_WIN11,
@@ -666,6 +671,9 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
+  if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
+  if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");
   if (["glass", "dark", "light"].includes(patch.background)) {
     settings.background = patch.background;
     sendToKind(null, "glass:background", settings.background);
@@ -689,7 +697,7 @@ ipcMain.on("mgr:reset-positions", () => {
 ipcMain.on("mgr:show-widgets", showAllWidgets);
 // 只開放打開 Google 日曆設定頁
 ipcMain.on("mgr:open-url", (_e, url) => {
-  if (String(url).startsWith("https://calendar.google.com/")) shell.openExternal(url);
+  if (/^https:\/\/(calendar\.google\.com|opendata\.cwa\.gov\.tw)\//.test(String(url))) shell.openExternal(url);
 });
 ipcMain.on("mgr:open", (_e, section) => openManager(typeof section === "string" ? section : undefined));
 ipcMain.on("mgr:test-popup", () => showPopup({ id: "demo", name: "Aero Buds Pro", connected: true, battery: 85 }));
@@ -843,6 +851,17 @@ ipcMain.on("open-pin", (_e, link) => {
 });
 
 /* ───────── IPC ───────── */
+// 中央氣象署：選了它而且有授權碼才用；回傳 null 代表用 Open-Meteo
+const cwa = createCwa(settings, saveSettings, log);
+ipcMain.handle("weather:cwa", async () => {
+  if (settings.weatherSource !== "cwa" || !cwa.hasKey()) return null;
+  return cwa.weather(settings.city);
+});
+ipcMain.handle("weather:cwa-test", async (_e, key) => {
+  if (typeof key === "string" && key.trim()) cwa.setKey(key);
+  const r = await cwa.weather(settings.city);
+  return r.error ? { ok: false, error: r.error } : { ok: true, place: r.place, temp: r.current.temperature_2m, desc: r.current.desc };
+});
 ipcMain.handle("get-state", () => ({ devices, city: settings.city, batteryPrefs: settings.batteryWidget }));
 
 /* ───────── 天氣自動定位 ───────── */

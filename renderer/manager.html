@@ -234,7 +234,28 @@
         </form>
       </div>
       <div class="group" id="cityResults" hidden></div>
-      <p class="hint">天氣資料來自 Open-Meteo（免費、不用註冊）。</p>
+      <h2>天氣資料來源</h2>
+      <div class="group">
+        <label class="row">
+          <span class="row-text"><b>Open-Meteo</b><small>全世界都有，不用註冊</small></span>
+          <input type="radio" name="wsrc" value="openmeteo" class="radio" />
+        </label>
+        <label class="row">
+          <span class="row-text"><b>中央氣象署</b><small>臺灣的鄉鎮預報，比較準；要先申請免費的授權碼。抓不到時會自動改用 Open-Meteo</small></span>
+          <input type="radio" name="wsrc" value="cwa" class="radio" />
+        </label>
+      </div>
+      <div class="group" id="cwaBox" hidden>
+        <div class="row">
+          <span class="row-text"><b>授權碼</b><small id="cwaMsg">到氣象資料開放平臺註冊後，在「會員資訊 → 取得授權碼」複製過來</small></span>
+          <button class="btn small ghost" id="cwaSite"><span data-icon="open_in_new"></span>開啟網站</button>
+        </div>
+        <form class="row" id="cwaForm">
+          <input class="grow" id="cwaKey" type="password" placeholder="CWA-XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX" spellcheck="false" autocomplete="off" />
+          <button class="btn small" type="submit">儲存並測試</button>
+        </form>
+      </div>
+      <p class="hint" id="wsrcHint">天氣資料來自 Open-Meteo（免費、不用註冊）。</p>
     </section>
 
     <!-- 一般 -->
