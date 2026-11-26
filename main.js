@@ -9,6 +9,11 @@ const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 
+// Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
+// 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
+// 關掉這個判斷；省電改由我們自己處理（鎖定、睡眠時暫停）。
+app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+
 // 「使用 Google／Pinterest 帳號登入」需要的程式 ID，打包時由 GitHub 放進 oauth.json（不在原始碼裡）。
 // 自己開發時也可以用環境變數 GW_GOOGLE_CLIENT_ID 等等。
 function loadOAuthConfig() {
@@ -58,7 +63,10 @@ function loadSettings() {
       calendar: { ...DEFAULTS.calendar, ...saved.calendar },
       batteryWidget: { ...DEFAULTS.batteryWidget, ...saved.batteryWidget },
       audio: { ...DEFAULTS.audio, ...saved.audio },
-      stacks: Array.isArray(saved.stacks) ? saved.stacks : [],
+      // 拿掉已經不存在的小組件（例如舊版的手機連結）
+      stacks: (Array.isArray(saved.stacks) ? saved.stacks : [])
+        .map((st) => ({ ...st, items: (st.items || []).filter((k) => ["battery", "clock", "weather", "audio", "calendar", "pinterest"].includes(k)) }))
+        .filter((st) => st.items.length > 0),
       pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
       bluetooth: { ...DEFAULTS.bluetooth, ...saved.bluetooth, muted: { ...saved.bluetooth?.muted } },
     };
@@ -141,8 +149,10 @@ function layoutItems() {
     const x = Math.min(Math.max(p.x - a.x, 0), a.width - width);
     const y = Math.min(Math.max(p.y - a.y, 0), a.height - height);
     const st = stackOf(key);
-    return { key, kinds: st ? st.items : [key], size, x, y, rotate: !!st?.rotate };
-  });
+    // 舊版設定可能還留著已經拿掉的小組件（例如手機連結），只留現在有的
+    const kinds = (st ? st.items : [key]).filter((k) => KINDS.includes(k));
+    return { key, kinds, size, x, y, rotate: !!st?.rotate };
+  }).filter((it) => it.kinds.length > 0);
 }
 function sendLayout() {
   if (hostWin && !hostWin.isDestroyed()) hostWin.webContents.send("host:layout", layoutItems());
@@ -182,6 +192,12 @@ function createHost() {
   // 點過小組件之後視窗會跑到最上面，點別的地方時就放回桌面那一層
   hostWin.on("blur", () => { hostWin.setIgnoreMouseEvents(true, { forward: true }); pinToDesktop(hostWin); });
   hostWin.on("closed", () => (hostWin = null));
+  // 畫面程式萬一當掉，自動重開，不會讓小組件整個消失
+  hostWin.webContents.on("render-process-gone", () => {
+    if (app.isQuitting) return;
+    hostWin?.destroy();
+    setTimeout(createHost, 1000);
+  });
 }
 
 function fitHostToScreen() {

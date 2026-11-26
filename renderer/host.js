@@ -56,7 +56,7 @@ let paused = false;
 function refresh(...kinds) {
   if (paused) return;
   for (const inst of instances.values()) for (const [kind, pane] of inst.panes) {
-    if (kinds.includes(kind)) WIDGETS[kind].render(pane, inst);
+    if (kinds.includes(kind)) try { WIDGETS[kind].render(pane, inst); } catch (err) { console.error(kind, err); }
   }
 }
 
@@ -112,15 +112,16 @@ function createInstance(item) {
   backdrop.className = "backdrop";
   el.append(backdrop);
 
-  const inst = { key: item.key, kinds: item.kinds, size: item.size, x: item.x, y: item.y, el, backdrop, panes: new Map(), timers: [] };
+  const inst = { key: item.key, kinds: item.kinds.filter((k) => WIDGETS[k]), size: item.size, x: item.x, y: item.y, el, backdrop, panes: new Map(), timers: [] };
   const mountPane = (kind, parent) => {
     const pane = document.createElement("div");
     pane.className = `pane ${kind}`;
     parent.append(pane);
     inst.panes.set(kind, pane);
-    WIDGETS[kind].mount?.(pane, inst);
-    WIDGETS[kind].render(pane, inst);
+    // 一個小組件出錯不能讓其他小組件跟著不見
+    try { WIDGETS[kind].mount?.(pane, inst); WIDGETS[kind].render(pane, inst); } catch (err) { console.error(kind, err); }
   };
+  item = { ...item, kinds: item.kinds.filter((k) => WIDGETS[k]) };
 
   if (item.kinds.length > 1) {
     // 疊放：上下捲動換小組件，右邊小點點表示現在第幾個
@@ -177,7 +178,8 @@ api.onHostLayout?.((items) => {
       continue;
     }
     if (old) destroyInstance(old);
-    instances.set(item.key, createInstance(item));
+    if (!item.kinds.some((k) => WIDGETS[k])) continue;
+    try { instances.set(item.key, createInstance(item)); } catch (err) { console.error(item.key, err); }
   }
   for (const [key, inst] of instances) if (!keep.has(key)) { destroyInstance(inst); instances.delete(key); }
 });
