@@ -386,7 +386,7 @@ function ensurePopup() {
   popup.webContents.once("did-finish-load", () => {
     popupReady = true;
     popup.showInactive();
-    if (popupDevice) popup.webContents.send("popup:device", popupDevice);
+    if (popupDevice) popup.webContents.send("popup:device", popupPayload(popupDevice));
   });
   popup.on("closed", () => { popup = null; popupReady = false; });
   return popup;
@@ -398,6 +398,8 @@ function placePopup() {
   popup.setPosition(Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), bounds.y);
 }
 
+// 彈窗跟著小組件背景：淺色＝白底，其他＝黑底
+const popupPayload = (d) => ({ ...d, theme: settings.background === "light" ? "light" : "dark" });
 function showPopup(device) {
   popupDevice = device;
   clearTimeout(popupTimer);
@@ -405,7 +407,7 @@ function showPopup(device) {
   if (popupReady) {
     placePopup();
     win.setAlwaysOnTop(true, "screen-saver"); // 全螢幕程式之後也要在最上面
-    win.webContents.send("popup:device", device);
+    win.webContents.send("popup:device", popupPayload(device));
   }
   popupTimer = setTimeout(hidePopup, 15000); // 保險：畫面自己收不起來時
 }
@@ -569,7 +571,7 @@ function evaluateDevices() {
     // 通知還開著時，電量晚一點才讀到就順便更新
     if (popupDevice && d.id === popupDevice.id && popup && !popup.isDestroyed()) {
       popupDevice = { ...d, alert: popupDevice.alert };
-      popup.webContents.send("popup:device", popupDevice);
+      popup.webContents.send("popup:device", popupPayload(popupDevice));
     }
   }
 }

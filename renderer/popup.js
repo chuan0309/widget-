@@ -10,7 +10,10 @@ function render(device) {
   notch.classList.toggle("low", low);
   $("name").textContent = device.name; // 直接用 Windows 裡的名稱
   $("sub").textContent = low ? "電量偏低，記得充電" : "已連線";
-  $("dev").innerHTML = deviceIcon(deviceType(device.name, device.cod));
+  // 白色立體產品插圖（重新放進去，入場動畫才會每次都播）
+  $("dev").innerHTML = deviceArt(deviceType(device.name, device.cod));
+  // 跟著小組件的背景：淺色＝白底黑字，其他＝黑底白字
+  document.body.classList.toggle("light", device.theme === "light");
   const b = device.battery;
   $("batt").innerHTML = b == null ? "" : `<span class="ring ${b <= 20 ? "low" : ""}"></span>${b}%`;
   // 讓圓環從 0 跑到目前電量
