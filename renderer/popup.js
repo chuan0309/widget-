@@ -9,13 +9,16 @@ function render(device) {
   const low = device.alert === "low";
   notch.classList.toggle("low", low);
   $("name").textContent = device.name; // 直接用 Windows 裡的名稱
-  $("sub").textContent = low ? "電量偏低，記得充電" : "已連線";
+  const charging = device.charging === true;
+  $("sub").textContent = low ? "電量偏低，記得充電" : charging ? "充電中" : "已連線";
   // 白色立體產品插圖（重新放進去，入場動畫才會每次都播）
   $("dev").innerHTML = deviceArtFor(device.name, deviceType(device.name, device.cod));
   // 跟著小組件的背景：淺色＝白底黑字，其他＝黑底白字
   document.body.classList.toggle("light", device.theme === "light");
   const b = device.battery;
-  $("batt").innerHTML = b == null ? "" : `<span class="ring ${b <= 20 ? "low" : ""}"></span>${b}%`;
+  // 充電中：圓環一定是綠色，中間一個閃電
+  const bolt = charging ? `<svg class="bolt" viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : "";
+  $("batt").innerHTML = b == null ? "" : `<span class="ring ${charging ? "charging" : b <= 20 ? "low" : ""}">${bolt}</span>${b}%`;
   // 讓圓環從 0 跑到目前電量
   requestAnimationFrame(() => $("batt").querySelector(".ring")?.style.setProperty("--p", b));
 }

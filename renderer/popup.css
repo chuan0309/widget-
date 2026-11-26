@@ -78,6 +78,7 @@ body {
   -webkit-mask: radial-gradient(closest-side, transparent 66%, #000 68%);
 }
 .ring.low { --c: #ff453a; }
+.ring .bolt { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 8px; height: 12px; fill: #30d158; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before { transition: none !important; }

@@ -953,7 +953,7 @@ const cwa = createCwa(settings, saveSettings, log);
 const phonePush = createPhonePush(settings, saveSettings, (st) => {
   evaluateDevices();
   const phone = devices.find((d) => d.connected && /iphone/i.test(d.name));
-  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone || { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
+  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone ? { ...phone, charging: true, battery: st.level ?? phone.battery } : { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
   else if (phone && popupDevice?.id === phone.id && popup && !popup.isDestroyed()) popup.webContents.send("popup:device", popupPayload(phone));
 }, log);
 ipcMain.handle("phone:info", () => phonePush.info());
