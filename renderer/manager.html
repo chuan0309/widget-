@@ -215,12 +215,23 @@
       <h1>天氣</h1>
       <p class="lead">天氣小組件顯示的城市。</p>
       <div class="group">
+        <label class="row">
+          <span class="row-text"><b>自動定位</b><small id="locMsg">用 Windows 定位服務找你在哪裡；沒開的話用網路估大概的城市</small></span>
+          <input type="checkbox" class="switch" id="weatherAuto" />
+        </label>
+        <div class="row">
+          <span class="row-text"><small>位置要準一點：Windows「設定 → 隱私權與安全性 → 位置」打開「讓桌面應用程式存取您的位置」</small></span>
+          <button class="btn small ghost" id="locateNow"><span data-icon="location_on"></span>重新定位</button>
+        </div>
+      </div>
+      <h2>現在的城市</h2>
+      <div class="group">
         <div class="row">
           <span class="row-icon" data-icon="location_on"></span>
           <span class="row-text"><b id="cityName"></b><small id="cityCoord"></small></span>
         </div>
       </div>
-      <h2>換城市</h2>
+      <h2>手動換城市（會關掉自動定位）</h2>
       <div class="group">
         <form class="row" id="citySearch">
           <input class="grow" id="cityInput" placeholder="輸入城市名稱，例如：台中、東京、Seoul" spellcheck="false" />

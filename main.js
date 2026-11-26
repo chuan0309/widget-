@@ -38,6 +38,7 @@ const DEFAULTS = {
   sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
+  weatherAuto: true, // 天氣自動定位
   // mode "rss"：讀公開網址；mode "api"：登入帳號（官方 API）
   pinterest: { mode: "rss", feed: "" },
   bluetooth: { notifyConnect: true, notifyLow: true, lowThreshold: 20, muted: {} },
@@ -329,30 +330,41 @@ let popup = null;
 let popupDevice = null;
 let popupTimer = null;
 
+// 通知視窗開程式時就先建好（藏起來），要用時直接顯示，不用等它載入
+let popupReady = false;
+function ensurePopup() {
+  if (popup && !popup.isDestroyed()) return popup;
+  const { bounds } = screen.getPrimaryDisplay();
+  popupReady = false;
+  popup = new BrowserWindow({
+    width: NOTCH_W, height: NOTCH_H,
+    x: Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), y: bounds.y,
+    transparent: true, frame: false, backgroundColor: "#00000000",
+    resizable: false, movable: false, maximizable: false, minimizable: false, fullscreenable: false,
+    skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false,
+    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: false },
+  });
+  popup.setAlwaysOnTop(true, "screen-saver");
+  popup.setIgnoreMouseEvents(true, { forward: true }); // 透明的地方點得穿，滑到瀏海上才接收
+  popup.loadFile(path.join(__dirname, "renderer", "popup.html"));
+  popup.webContents.once("did-finish-load", () => {
+    popupReady = true;
+    if (popupDevice) { popup.showInactive(); popup.webContents.send("popup:device", popupDevice); }
+  });
+  popup.on("closed", () => { popup = null; popupReady = false; });
+  return popup;
+}
+
 function showPopup(device) {
   popupDevice = device;
   clearTimeout(popupTimer);
-  const { bounds } = screen.getPrimaryDisplay();
-  if (!popup || popup.isDestroyed()) {
-    popup = new BrowserWindow({
-      width: NOTCH_W, height: NOTCH_H,
-      x: Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), y: bounds.y,
-      transparent: true, frame: false, backgroundColor: "#00000000",
-      resizable: false, movable: false, maximizable: false, minimizable: false, fullscreenable: false,
-      skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false,
-      webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true },
-    });
-    popup.setAlwaysOnTop(true, "screen-saver");
-    popup.setIgnoreMouseEvents(true, { forward: true }); // 透明的地方點得穿，滑到瀏海上才接收
-    popup.loadFile(path.join(__dirname, "renderer", "popup.html"));
-    popup.webContents.once("did-finish-load", () => {
-      popup.showInactive();
-      popup.webContents.send("popup:device", popupDevice);
-    });
-    popup.on("closed", () => (popup = null));
-  } else {
-    popup.showInactive();
-    popup.webContents.send("popup:device", device);
+  const win = ensurePopup();
+  if (popupReady) {
+    // 螢幕可能換過（接外接螢幕），每次都對齊主螢幕正上方
+    const { bounds } = screen.getPrimaryDisplay();
+    win.setPosition(Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), bounds.y);
+    win.showInactive();
+    win.webContents.send("popup:device", device);
   }
   popupTimer = setTimeout(hidePopup, 15000); // 保險：畫面自己收不起來時
 }
@@ -577,6 +589,7 @@ function managerState() {
     calendars: (settings.calendar.sources || []).map((c, i) => ({ name: c.name || `行事曆 ${i + 1}`, color: c.color })),
     devices,
     autostart: app.getLoginItemSettings().openAtLogin,
+    locate: locateInfo,
     version: app.getVersion(),
     isWin11: IS_WIN11,
     dataFolder: app.getPath("userData"),
@@ -598,6 +611,10 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     if (b.mute) for (const [id, m] of Object.entries(b.mute)) {
       if (m) settings.bluetooth.muted[id] = true; else delete settings.bluetooth.muted[id];
     }
+  }
+  if ("weatherAuto" in patch) {
+    settings.weatherAuto = !!patch.weatherAuto;
+    if (settings.weatherAuto) locateCity();
   }
   if (patch.city && typeof patch.city.lat === "number" && typeof patch.city.lon === "number") {
     settings.city = { name: String(patch.city.name || "").slice(0, 40), lat: patch.city.lat, lon: patch.city.lon };
@@ -799,6 +816,63 @@ ipcMain.on("open-pin", (_e, link) => {
 /* ───────── IPC ───────── */
 ipcMain.handle("get-state", () => ({ devices, city: settings.city, batteryPrefs: settings.batteryWidget }));
 
+/* ───────── 天氣自動定位 ───────── */
+// 1. 先問 Windows 定位服務（準，但要使用者在 Windows 設定裡允許桌面程式取用位置）
+// 2. 不行的話用網路 IP 估大概在哪個城市
+// 地名用 BigDataCloud 的免費反查（不用金鑰），中文是「臺北市」這種正式名稱
+function windowsLocation() {
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") return resolve(null);
+    const script = path.join(__dirname, "locate.ps1").replace("app.asar", "app.asar.unpacked");
+    const p = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
+    let out = "";
+    const timer = setTimeout(() => { p.kill(); resolve(null); }, 20000);
+    p.stdout.setEncoding("utf8");
+    p.stdout.on("data", (d) => (out += d));
+    p.on("exit", () => {
+      clearTimeout(timer);
+      try {
+        const r = JSON.parse(out.trim().split("\n").pop());
+        resolve(r.ok && typeof r.lat === "number" ? r : null);
+      } catch { resolve(null); }
+    });
+    p.on("error", () => { clearTimeout(timer); resolve(null); });
+  });
+}
+
+let locating = null;
+let locateInfo = { source: "", at: 0, error: "" };
+async function locateCity() {
+  if (locating) return locating;
+  locating = (async () => {
+    const pos = await windowsLocation();
+    const url = new URL("https://api.bigdatacloud.net/data/reverse-geocode-client");
+    url.searchParams.set("localityLanguage", "zh-Hant");
+    if (pos) { url.searchParams.set("latitude", pos.lat); url.searchParams.set("longitude", pos.lon); }
+    const d = await (await net.fetch(url.href)).json();
+    const lat = pos?.lat ?? d.latitude, lon = pos?.lon ?? d.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") throw new Error("定位失敗");
+    const name = d.city || d.principalSubdivision || d.locality || "目前位置";
+    const moved = Math.abs(lat - settings.city.lat) > 0.03 || Math.abs(lon - settings.city.lon) > 0.03 || name !== settings.city.name;
+    settings.city = { name, lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 };
+    saveSettings();
+    locateInfo = { source: pos ? "windows" : "ip", at: Date.now(), error: "" };
+    if (moved) reloadKind("weather");
+    managerWin?.webContents.send("mgr:refresh");
+    return { ok: true, city: settings.city, source: locateInfo.source };
+  })().catch((e) => {
+    locateInfo = { ...locateInfo, error: e.message || "定位失敗" };
+    return { error: locateInfo.error };
+  }).finally(() => { locating = null; });
+  return locating;
+}
+ipcMain.handle("weather:locate", () => locateCity());
+function startAutoLocate() {
+  const run = () => settings.weatherAuto && locateCity();
+  setTimeout(run, 8000);                 // 開機後定位一次
+  setInterval(run, 3 * 60 * 60 * 1000);  // 之後每 3 小時（帶筆電出門會跟著換）
+}
+
 /* ───────── Google 日曆 ───────── */
 const google = createGoogle({ settings, save: saveSettings, config: OAUTH.google });
 const calendar = createCalendar({
@@ -846,6 +920,8 @@ if (!app.requestSingleInstanceLock()) {
     startAudio();
     calendar.start();
     setupUpdater();
+    startAutoLocate();
+    ensurePopup(); // 先把通知視窗建好
     // 鎖定螢幕、睡眠時小組件停止更新，省電
     powerMonitor.on("lock-screen", () => setPaused(true));
     powerMonitor.on("suspend", () => setPaused(true));

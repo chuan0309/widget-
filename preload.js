@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld("api", {
   onCalUpdate: (cb) => ipcRenderer.on("cal:update", (_e, d) => cb(d)),
   onMgrRefresh: (cb) => ipcRenderer.on("mgr:refresh", () => cb()),
   onBackdrop: (cb) => ipcRenderer.on("backdrop", (_e, data) => cb(data)),
+  weatherLocate: () => ipcRenderer.invoke("weather:locate"),
   audioGet: () => ipcRenderer.invoke("audio:get"),
   audioSet: (id) => ipcRenderer.invoke("audio:set", id),
   onAudio: (cb) => ipcRenderer.on("audio", (_e, list) => cb(list)),

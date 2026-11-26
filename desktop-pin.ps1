@@ -7,6 +7,8 @@
 # its owner, so the widget sits right on top of the desktop.
 
 $ErrorActionPreference = 'SilentlyContinue'
+# Background helper: never compete with the widgets' animations for the CPU
+[System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
 
 Add-Type -TypeDefinition @'
 using System;

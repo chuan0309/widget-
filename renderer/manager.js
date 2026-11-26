@@ -496,6 +496,12 @@ $("calOpenGoogle").addEventListener("click", () => window.api.mgrOpenUrl("https:
 
 /* ───────── 天氣 ───────── */
 function renderCity() {
+  $("weatherAuto").checked = state.settings.weatherAuto !== false;
+  const li = state.locate || {};
+  $("locMsg").textContent = li.error ? `定位失敗：${li.error}`
+    : li.source === "windows" ? "用 Windows 定位服務（比較準）"
+    : li.source === "ip" ? "用網路估的大概位置（Windows 定位服務沒開）"
+    : "用 Windows 定位服務找你在哪裡；沒開的話用網路估大概的城市";
   const c = state.settings.city;
   $("cityName").textContent = c.name;
   $("cityCoord").textContent = `緯度 ${c.lat.toFixed(2)}・經度 ${c.lon.toFixed(2)}`;
@@ -523,7 +529,7 @@ $("citySearch").addEventListener("submit", async (e) => {
       row.innerHTML = `<span class="row-icon">${icon("location_on")}</span>
         <span class="row-text"><b>${escapeHTML(r.name)}</b><small>${escapeHTML(where)}</small></span>`;
       row.addEventListener("click", async () => {
-        await save({ city: { name: r.name, lat: r.latitude, lon: r.longitude } }, `天氣改成 ${r.name}`);
+        await save({ weatherAuto: false, city: { name: r.name, lat: r.latitude, lon: r.longitude } }, `天氣改成 ${r.name}`);
         box.hidden = true;
         $("cityInput").value = "";
       });
@@ -532,6 +538,18 @@ $("citySearch").addEventListener("submit", async (e) => {
   } catch {
     box.innerHTML = `<div class="row"><span class="row-text"><b class="err">連不到網路</b></span></div>`;
   }
+});
+
+$("weatherAuto").addEventListener("change", (e) =>
+  save({ weatherAuto: e.target.checked }, e.target.checked ? "會自動定位" : "不自動定位"));
+$("locateNow").addEventListener("click", async () => {
+  $("locateNow").disabled = true;
+  $("locMsg").textContent = "定位中…（最多十幾秒）";
+  const r = await window.api.weatherLocate();
+  $("locateNow").disabled = false;
+  state = await window.api.mgrGet();
+  render();
+  if (r.ok) toast(`現在在 ${r.city.name}`);
 });
 
 /* ───────── 一般 ───────── */

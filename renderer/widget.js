@@ -49,32 +49,32 @@ function buildStack() {
 let wall = null;
 let backdropEl = null;
 
+// 只模糊「小組件後面那一塊」桌布（多留一點邊，模糊的邊緣才不會變淡），
+// 不要整張桌布一起模糊 —— 這樣顯示卡的工作量只有原本的幾十分之一，拖動時也順
+const BLEED = 48;
 function layoutBackdrop({ win, area, scale }) {
   if (!wall || !backdropEl) return;
-  if (wall.mode === "color") {
-    backdropEl.style.cssText = `inset:-40px;background:${wall.color}`;
-    return;
-  }
-  // 照 Windows 的「調整方式」算出桌布在螢幕上畫在哪裡、多大
+  const st = backdropEl.style;
+  st.left = st.top = `${-BLEED}px`;
+  st.width = `${win.width + BLEED * 2}px`;
+  st.height = `${win.height + BLEED * 2}px`;
+  if (wall.mode === "color") { st.background = wall.color; return; }
+  // 照 Windows 的「調整方式」算出整張桌布在螢幕上畫在哪裡、多大
   const iw = wall.width / scale, ih = wall.height / scale; // 圖片原始大小（換成螢幕座標）
   let w = area.width, h = area.height;
   if (wall.mode === "fill" || wall.mode === "span") {
     const k = Math.max(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
   } else if (wall.mode === "fit") {
     const k = Math.min(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
-  } else if (wall.mode === "center") {
+  } else if (wall.mode === "center" || wall.mode === "tile") {
     w = iw; h = ih;
   }
-  const x = area.x + (area.width - w) / 2 - win.x;
-  const y = area.y + (area.height - h) / 2 - win.y;
-  const st = backdropEl.style;
-  if (wall.mode === "tile") {
-    st.left = `${area.x - win.x}px`; st.top = `${area.y - win.y}px`;
-    st.width = `${area.width}px`; st.height = `${area.height}px`;
-    st.backgroundRepeat = "repeat"; st.backgroundSize = `${iw}px ${ih}px`;
-  } else {
-    st.left = `${x}px`; st.top = `${y}px`; st.width = `${w}px`; st.height = `${h}px`;
-  }
+  // 桌布左上角相對於「模糊區塊左上角」的位置
+  const x = (wall.mode === "tile" ? area.x : area.x + (area.width - w) / 2) - win.x + BLEED;
+  const y = (wall.mode === "tile" ? area.y : area.y + (area.height - h) / 2) - win.y + BLEED;
+  st.backgroundRepeat = wall.mode === "tile" ? "repeat" : "no-repeat";
+  st.backgroundSize = `${w}px ${h}px`;
+  st.backgroundPosition = `${x}px ${y}px`;
 }
 
 window.api.onBackdrop?.((data) => {
@@ -477,6 +477,8 @@ const LOCK_SVG = icon("lock");
 function pinElement(pin) {
   const img = document.createElement("img");
   img.className = "pn-pin";
+  img.decoding = "async"; // 圖片在背景解碼，不卡畫面
+  img.loading = "lazy";
   img.src = pin.img;
   img.alt = pin.title || "";
   img.title = pin.title || "";

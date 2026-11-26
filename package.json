@@ -26,6 +26,7 @@
       "google.js",
       "oauth.json",
       "audio.ps1",
+      "locate.ps1",
       "bt-watch.ps1",
       "renderer/**",
       "assets/**"
@@ -33,7 +34,8 @@
     "asarUnpack": [
       "bt-watch.ps1",
       "desktop-pin.ps1",
-      "audio.ps1"
+      "audio.ps1",
+      "locate.ps1"
     ],
     "win": {
       "target": [

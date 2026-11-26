@@ -10,6 +10,8 @@
 # SoundSwitch and AudioDeviceCmdlets use.
 
 $ErrorActionPreference = 'SilentlyContinue'
+# Background helper: never compete with the widgets' animations for the CPU
+[System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
@@ -151,5 +153,5 @@ while ($true) {
     [Console]::Out.Flush()
     $last = $json
   }
-  Start-Sleep -Milliseconds 1500
+  Start-Sleep -Milliseconds 2000
 }
