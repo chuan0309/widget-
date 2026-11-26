@@ -63,4 +63,8 @@ contextBridge.exposeInMainWorld("api", {
   pinterestBoards: () => ipcRenderer.invoke("pins:boards"),
   pinterestChoose: (source) => ipcRenderer.invoke("pins:choose", source),
   pinterestLogout: () => ipcRenderer.send("pins:logout"),
+  pinHomeStatus: () => ipcRenderer.invoke("pins:home-status"),
+  pinHomeLogin: () => ipcRenderer.invoke("pins:home-login"),
+  pinHomeSet: (on) => ipcRenderer.invoke("pins:home-set", on),
+  pinHomeLogout: () => ipcRenderer.invoke("pins:home-logout"),
 });

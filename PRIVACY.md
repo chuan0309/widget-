@@ -7,6 +7,7 @@ Glass Widgets is a personal desktop app for Windows that shows widgets (clock, w
 ## What data the app uses
 
 - **Pinterest data**: when the user signs in with Pinterest, the app reads the user's own boards and Pins (including secret boards, if the user allows it) only to display the Pin images in a desktop widget on that user's computer. The app does not create, edit, or delete anything on Pinterest.
+- **Pinterest home feed (optional)**: if the user turns on "home feed" and signs in to pinterest.com inside the app, the sign-in cookies are kept only in the app's own browser storage on the computer. The app opens the user's Pinterest home page in a hidden window about once an hour to show those images in the widget. Nothing is sent anywhere else.
 - **Pinterest access tokens and app credentials**: stored only on the user's computer, encrypted with the Windows Data Protection API. They are never sent anywhere except to Pinterest's own API.
 - **Bluetooth device names and battery levels**: read from Windows on the user's computer to show connection notifications and battery levels. This data never leaves the computer.
 - **Weather**: the city's coordinates are sent to Open-Meteo (api.open-meteo.com) to get the forecast. If the user chooses the Central Weather Administration (opendata.cwa.gov.tw) as the source, the app sends the user's own CWA key (stored encrypted on the computer) and the name of the county to CWA to get the township forecast.
@@ -34,6 +35,7 @@ Questions about this policy can be sent through this project's GitHub page: http
 Glass Widgets 是一個在 Windows 桌面顯示小組件的個人程式，沒有伺服器。
 
 - **Pinterest 資料**：登入後只會讀取使用者自己的圖版和 Pin，用來在使用者自己的電腦桌面上顯示圖片，不會新增、修改或刪除任何東西。
+- **Pinterest 首頁推薦（選用）**：使用者在程式裡登入 pinterest.com 後，登入資料只存在程式自己的瀏覽資料夾；程式大約每小時在看不到的視窗打開使用者的 Pinterest 首頁，把圖顯示在小組件上，不會傳到其他地方。
 - **登入資料**：只存在使用者的電腦上，並用 Windows 內建加密保護，只會傳給 Pinterest 官方 API。
 - **藍牙裝置名稱和電量**：只在使用者電腦上讀取，不會傳出去。
 - **天氣**：只會把城市座標傳給 Open-Meteo 取得天氣；如果選了中央氣象署，會把使用者自己的授權碼（加密存在電腦上）和縣市名稱傳給氣象署取得鄉鎮預報。

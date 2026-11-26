@@ -20,6 +20,7 @@
       "main.js",
       "preload.js",
       "pinterest-api.js",
+      "pinterest-home.js",
       "wallpaper.js",
       "calendar.js",
       "google.js",

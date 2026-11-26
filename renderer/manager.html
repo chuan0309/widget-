@@ -166,6 +166,20 @@
         </div>
       </div>
 
+      <h2>首頁推薦（依你的興趣）</h2>
+      <div class="group">
+        <div class="row">
+          <span class="row-icon" data-icon="pin"></span>
+          <span class="row-text"><b id="pnHomeTitle">隨機播放你 Pinterest 首頁推薦的圖</b><small id="pnHomeMsg">在程式的視窗裡登入一次 pinterest.com，之後會定時讀你的首頁</small></span>
+          <button class="btn small" id="pnHomeLogin"><span data-icon="login"></span>用網頁登入</button>
+          <input type="checkbox" class="switch" id="pnHomeOn" hidden />
+        </div>
+        <div class="row" id="pnHomeMore" hidden>
+          <span class="row-text"><small>這是讀網頁版 Pinterest，不是官方 API；Pinterest 改版的話可能要更新程式。關掉時會改用下面選的圖版。</small></span>
+          <button class="btn small ghost" id="pnHomeLogout"><span data-icon="logout"></span>登出網頁</button>
+        </div>
+      </div>
+
       <h2>換圖間隔</h2>
       <div class="group">
         <div class="row">
