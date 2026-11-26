@@ -285,6 +285,8 @@ async function openBoards() {
 
 async function initPinterest() {
   $("pnBadge").innerHTML = icon("pin");
+  // 在管理程式改了 Pinterest 設定 → 重新讀
+  window.api.onPinsChanged?.(async () => applyPins(await window.api.getPins()));
   $("pnGear").innerHTML = icon("swap");
   const status = await window.api.pinterestStatus();
   $("pnAppId").value = status.clientId;

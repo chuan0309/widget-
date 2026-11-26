@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeTheme, nativeImage, shell, net } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
+const os = require("os");
 const fs = require("fs");
 const { createPinterestApi } = require("./pinterest-api");
 const wallpaper = require("./wallpaper");
@@ -15,7 +16,9 @@ const DEFAULTS = {
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   // mode "rss"：讀公開網址；mode "api"：登入帳號（官方 API）
   pinterest: { mode: "rss", feed: "" },
+  bluetooth: { notifyConnect: true, notifyLow: true, lowThreshold: 20, muted: {} },
 };
+const FIRST_RUN = !fs.existsSync(SETTINGS_FILE);
 function loadSettings() {
   try {
     const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
@@ -24,6 +27,7 @@ function loadSettings() {
       ...DEFAULTS, ...saved,
       widgets: { ...DEFAULTS.widgets, ...saved.widgets },
       pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
+      bluetooth: { ...DEFAULTS.bluetooth, ...saved.bluetooth, muted: { ...saved.bluetooth?.muted } },
     };
   } catch {
     return structuredClone(DEFAULTS);
@@ -245,7 +249,6 @@ function mergeSameDevice(list) {
   return [...byName.values()];
 }
 
-const LOW_BATTERY = 20;
 const lowAlerted = new Set();
 
 function handleDevices(raw) {
@@ -256,15 +259,17 @@ function handleDevices(raw) {
 
   const first = firstSnapshot;
   firstSnapshot = false;
+  const bt = settings.bluetooth;
   for (const d of next) {
+    const muted = !!bt.muted[d.id]; // 在管理程式裡關掉這台的通知
     // 新連上的裝置 → 跳通知（開程式前就連著的不跳）
-    if (!first && d.connected && !wasConnected.has(d.id)) showPopup(d);
+    if (!first && bt.notifyConnect && !muted && d.connected && !wasConnected.has(d.id)) showPopup(d);
 
-    // 電量低 → 跳一次提醒，充回 25% 以上才會再提醒
-    if (d.connected && d.battery != null && d.battery <= LOW_BATTERY && !lowAlerted.has(d.id)) {
+    // 電量低 → 跳一次提醒，充回門檻 +5% 以上才會再提醒
+    if (d.connected && d.battery != null && d.battery <= bt.lowThreshold && !lowAlerted.has(d.id)) {
       lowAlerted.add(d.id);
-      showPopup({ ...d, alert: "low" });
-    } else if (d.battery != null && d.battery > LOW_BATTERY + 5) {
+      if (bt.notifyLow && !muted) showPopup({ ...d, alert: "low" });
+    } else if (d.battery != null && d.battery > bt.lowThreshold + 5) {
       lowAlerted.delete(d.id);
     }
 
@@ -277,41 +282,100 @@ function handleDevices(raw) {
 }
 
 function broadcast(channel, data) {
-  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send(channel, data);
+  for (const w of [...Object.values(widgetWins), managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
 }
+
+/* ───────── 管理程式視窗 ───────── */
+let managerWin = null;
+// Windows 11 22H2 以上才有 Mica / Acrylic 材質
+const IS_WIN11 = process.platform === "win32" && Number(os.release().split(".")[2]) >= 22621;
+
+function openManager(section) {
+  if (managerWin && !managerWin.isDestroyed()) {
+    if (managerWin.isMinimized()) managerWin.restore();
+    managerWin.show();
+    managerWin.focus();
+    if (section) managerWin.webContents.send("mgr:goto", section);
+    return;
+  }
+  managerWin = new BrowserWindow({
+    width: 920, height: 640, minWidth: 780, minHeight: 520,
+    title: "Glass Widgets",
+    icon: path.join(__dirname, "assets", "icon.png"),
+    show: false,
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "#00000000", symbolColor: "#ffffff", height: 40 },
+    ...(IS_WIN11 ? { backgroundMaterial: "mica", backgroundColor: "#00000000" } : { backgroundColor: "#1d1e26" }),
+    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true },
+  });
+  managerWin.loadFile(path.join(__dirname, "renderer", "manager.html"), {
+    query: { mica: IS_WIN11 ? "1" : "0", section: section || "" },
+  });
+  managerWin.once("ready-to-show", () => managerWin.show());
+  managerWin.on("closed", () => (managerWin = null)); // 關掉視窗不會結束程式，小組件繼續在桌面
+}
+
+function setWidgetEnabled(kind, on) {
+  settings.widgets[kind] = on;
+  if (on && !widgetWins[kind]) createWidget(kind);
+  if (!on) widgetWins[kind]?.destroy();
+}
+
+function managerState() {
+  const { pinterest, ...rest } = settings;
+  return {
+    settings: { ...rest, positions: undefined },
+    devices,
+    autostart: app.getLoginItemSettings().openAtLogin,
+    version: app.getVersion(),
+    isWin11: IS_WIN11,
+    dataFolder: app.getPath("userData"),
+  };
+}
+
+ipcMain.handle("mgr:get", managerState);
+ipcMain.handle("mgr:set", (_e, patch = {}) => {
+  if (patch.widgets) for (const [k, v] of Object.entries(patch.widgets)) if (k in WIDGETS) setWidgetEnabled(k, !!v);
+  if (patch.glass && patch.glass !== settings.glass && ["ios", "acrylic"].includes(patch.glass)) {
+    settings.glass = patch.glass;
+    rebuildWidgets();
+  }
+  if (patch.bluetooth) {
+    const b = patch.bluetooth;
+    if ("notifyConnect" in b) settings.bluetooth.notifyConnect = !!b.notifyConnect;
+    if ("notifyLow" in b) settings.bluetooth.notifyLow = !!b.notifyLow;
+    if ("lowThreshold" in b) settings.bluetooth.lowThreshold = Math.min(50, Math.max(5, Number(b.lowThreshold) || 20));
+    if (b.mute) for (const [id, m] of Object.entries(b.mute)) {
+      if (m) settings.bluetooth.muted[id] = true; else delete settings.bluetooth.muted[id];
+    }
+  }
+  if (patch.city && typeof patch.city.lat === "number" && typeof patch.city.lon === "number") {
+    settings.city = { name: String(patch.city.name || "").slice(0, 40), lat: patch.city.lat, lon: patch.city.lon };
+    widgetWins.weather?.webContents.reload(); // 天氣小組件重新讀
+  }
+  if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
+  saveSettings();
+  return managerState();
+});
+ipcMain.on("mgr:reset-positions", () => {
+  settings.positions = {};
+  saveSettings();
+  rebuildWidgets();
+});
+ipcMain.on("mgr:show-widgets", showAllWidgets);
+ipcMain.on("mgr:test-popup", () => showPopup({ id: "demo", name: "Aero Buds Pro", connected: true, battery: 85 }));
+ipcMain.on("mgr:open-folder", () => shell.openPath(app.getPath("userData")));
+ipcMain.on("mgr:quit", () => app.quit());
+// 管理程式改了 Pinterest 設定 → 通知 Pinterest 小組件重新讀
+ipcMain.on("mgr:pins-changed", () => widgetWins.pinterest?.webContents.send("pins:changed"));
 
 /* ───────── 系統匣圖示 ───────── */
 let tray = null;
 function buildTrayMenu() {
-  const toggleWidget = (kind) => () => {
-    settings.widgets[kind] = !settings.widgets[kind];
-    saveSettings();
-    if (settings.widgets[kind]) createWidget(kind);
-    else widgetWins[kind]?.destroy();
-  };
-  const setGlass = (mode) => () => {
-    settings.glass = mode;
-    saveSettings();
-    rebuildWidgets();
-  };
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "顯示測試通知", click: () => showPopup({ id: "demo", name: "Aero Buds Pro", connected: true, battery: 85 }) },
+    { label: "開啟 Glass Widgets", click: () => openManager() },
     { label: "把小組件叫回來", click: showAllWidgets },
-    { type: "separator" },
-    { label: "時鐘", type: "checkbox", checked: settings.widgets.clock, click: toggleWidget("clock") },
-    { label: "天氣", type: "checkbox", checked: settings.widgets.weather, click: toggleWidget("weather") },
-    { label: "電量", type: "checkbox", checked: settings.widgets.battery, click: toggleWidget("battery") },
-    { label: "Pinterest", type: "checkbox", checked: settings.widgets.pinterest, click: toggleWidget("pinterest") },
-    { type: "separator" },
-    { label: "玻璃效果：圓角毛玻璃（像 iPhone）", type: "radio", checked: settings.glass === "ios", click: setGlass("ios") },
-    { label: "玻璃效果：Windows 毛玻璃（小圓角）", type: "radio", checked: settings.glass === "acrylic", click: setGlass("acrylic") },
-    { type: "separator" },
-    {
-      label: "開機自動啟動", type: "checkbox",
-      checked: app.getLoginItemSettings().openAtLogin,
-      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
-    },
-    { label: "開啟設定檔（改城市）", click: () => { saveSettings(); shell.openPath(SETTINGS_FILE); } },
+    { label: "顯示測試通知", click: () => showPopup({ id: "demo", name: "Aero Buds Pro", connected: true, battery: 85 }) },
     { type: "separator" },
     { label: "離開", click: () => app.quit() },
   ]));
@@ -427,18 +491,20 @@ ipcMain.on("popup:close", hidePopup);
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", showAllWidgets);
+  // 再點一次程式捷徑 → 打開管理程式
+  app.on("second-instance", () => openManager());
   app.whenReady().then(() => {
     nativeTheme.themeSource = "dark"; // 讓毛玻璃是深色，白字才看得清楚
     app.setAppUserModelId("local.glasswidgets.app");
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "assets", "tray.png")));
     tray.setToolTip("Glass Widgets");
-    tray.on("click", showAllWidgets);
+    tray.on("click", () => openManager());
     buildTrayMenu();
     refreshWallpaper(true).finally(rebuildWidgets);
     setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換
     screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
     startWatcher();
+    if (FIRST_RUN) { saveSettings(); openManager(); } // 第一次打開時順便打開管理程式
   });
   app.on("before-quit", () => {
     app.isQuitting = true;
