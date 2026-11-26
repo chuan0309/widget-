@@ -43,6 +43,95 @@ public static class DesktopPin {
 }
 '@
 
+# ===== DualSense battery =====
+# Windows has no battery property for PlayStation controllers; Steam reads it from the
+# controller's own input reports. Same here, read-only: open the HID device (shared),
+# read a few input reports and take the status byte (layout as in Linux hid-playstation).
+# Over Bluetooth the battery is only in the extended 0x31 report, which the controller
+# sends after a program like Steam has switched it on; we never switch it ourselves
+# (that would stop DirectInput games from seeing the controller).
+Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+
+public static class DualSense {
+  [DllImport("hid.dll")] static extern void HidD_GetHidGuid(out Guid g);
+  [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  static extern IntPtr SetupDiGetClassDevs(ref Guid g, IntPtr enumerator, IntPtr hwnd, int flags);
+  [DllImport("setupapi.dll", SetLastError = true)]
+  static extern bool SetupDiEnumDeviceInterfaces(IntPtr set, IntPtr info, ref Guid g, int index, ref SP_DEVICE_INTERFACE_DATA data);
+  [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr set, ref SP_DEVICE_INTERFACE_DATA data, IntPtr detail, int size, out int required, IntPtr info);
+  [DllImport("setupapi.dll")] static extern bool SetupDiDestroyDeviceInfoList(IntPtr set);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr sec, uint disposition, uint flags, IntPtr template);
+
+  [StructLayout(LayoutKind.Sequential)]
+  struct SP_DEVICE_INTERFACE_DATA { public int cbSize; public Guid InterfaceClassGuid; public int Flags; public IntPtr Reserved; }
+
+  public static bool Charging;
+
+  // Battery 0-100 of the first DualSense / DualSense Edge that reports it, or -1
+  public static int Battery() {
+    Guid g; HidD_GetHidGuid(out g);
+    IntPtr set = SetupDiGetClassDevs(ref g, IntPtr.Zero, IntPtr.Zero, 0x12); // PRESENT | DEVICEINTERFACE
+    if (set == new IntPtr(-1)) return -1;
+    try {
+      for (int i = 0; i < 256; i++) {
+        SP_DEVICE_INTERFACE_DATA d = new SP_DEVICE_INTERFACE_DATA();
+        d.cbSize = Marshal.SizeOf(d);
+        if (!SetupDiEnumDeviceInterfaces(set, IntPtr.Zero, ref g, i, ref d)) break;
+        int req;
+        SetupDiGetDeviceInterfaceDetail(set, ref d, IntPtr.Zero, 0, out req, IntPtr.Zero);
+        if (req <= 0) continue;
+        IntPtr buf = Marshal.AllocHGlobal(req);
+        string path;
+        try {
+          Marshal.WriteInt32(buf, IntPtr.Size == 8 ? 8 : 6);
+          if (!SetupDiGetDeviceInterfaceDetail(set, ref d, buf, req, out req, IntPtr.Zero)) continue;
+          path = Marshal.PtrToStringUni(IntPtr.Add(buf, 4));
+        } finally { Marshal.FreeHGlobal(buf); }
+        string p = (path ?? "").ToLowerInvariant();
+        if (p.IndexOf("054c") < 0 || (p.IndexOf("0ce6") < 0 && p.IndexOf("0df2") < 0)) continue;
+        int level = ReadLevel(path);
+        if (level >= 0) return level;
+      }
+    } finally { SetupDiDestroyDeviceInfoList(set); }
+    return -1;
+  }
+
+  static int ReadLevel(string path) {
+    // GENERIC_READ, share read+write, OPEN_EXISTING, FILE_FLAG_OVERLAPPED
+    SafeFileHandle h = CreateFile(path, 0x80000000, 3, IntPtr.Zero, 3, 0x40000000, IntPtr.Zero);
+    if (h.IsInvalid) return -1;
+    try {
+      using (FileStream fs = new FileStream(h, FileAccess.Read, 1024, true)) {
+        byte[] b = new byte[1024];
+        for (int k = 0; k < 6; k++) {
+          IAsyncResult ar = fs.BeginRead(b, 0, b.Length, null, null);
+          if (!ar.AsyncWaitHandle.WaitOne(400)) return -1; // controller asleep / not sending
+          int n = fs.EndRead(ar);
+          int status = -1;
+          if (b[0] == 0x01 && n >= 54) status = b[53];        // USB: report 0x01, data starts at byte 1
+          else if (b[0] == 0x31 && n >= 56) status = b[54];   // Bluetooth extended: data starts at byte 2
+          if (status < 0) continue;
+          int lvl = status & 0x0F, state = (status & 0xF0) >> 4;
+          Charging = state == 1;
+          if (state == 2) return 100;                        // full
+          if (state == 0 || state == 1) return Math.Min(lvl * 10 + 5, 100);
+        }
+      }
+    } catch { }
+    return -1;
+  }
+}
+'@
+
+$dsCache = @{ at = [datetime]::MinValue; level = -1 }
+$DS_EVERY_SECONDS = 60
+
 # ===== Audio outputs =====
 Add-Type -TypeDefinition @'
 using System;
@@ -310,6 +399,17 @@ function Get-BtJson {
     if ($d.connected) { $k.connected = $true }
     if ($d.battery -ne $null -and ($k.battery -eq $null -or $d.battery -gt $k.battery)) { $k.battery = $d.battery }
     if (-not $k.cod) { $k.cod = $d.cod }
+  }
+  # PlayStation controllers: read the battery the way Steam does (see DualSense above)
+  $ds = @($list | Where-Object { $_.connected -and $_.battery -eq $null -and $_.name -match 'DualSense|Wireless Controller' })
+  if ($ds.Count -gt 0) {
+    $now = Get-Date
+    if (($now - $script:dsCache.at).TotalSeconds -ge $DS_EVERY_SECONDS) {
+      $lvl = -1
+      try { $lvl = [DualSense]::Battery() } catch {}
+      $script:dsCache = @{ at = $now; level = $lvl }
+    }
+    if ($script:dsCache.level -ge 0) { foreach ($d in $ds) { $d.battery = $script:dsCache.level } }
   }
   $json = ConvertTo-Json -InputObject $list -Compress -Depth 3
   if (-not $json) { $json = '[]' }
