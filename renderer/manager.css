@@ -14,7 +14,7 @@ html, body { height: 100%; }
 body {
   display: flex;
   color: var(--ink);
-  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", "Noto Sans TC", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   background: #1d1e26;
   overflow: hidden;
@@ -356,7 +356,7 @@ select.select option { background: #2c2c2e; }
   --fw: 600;
   width: 110px; height: 110px; flex: none; border-radius: 22px; background: #1c1c1e; color: #fff;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-weight: var(--fw);
+  font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-weight: var(--fw);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 .font-sample b { font-size: 34px; line-height: 1; font-weight: max(100, calc(var(--fw) - clamp(0, 500 - var(--fw), 100))); }
