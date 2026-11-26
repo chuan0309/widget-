@@ -379,7 +379,8 @@ function hourLabel(h) {
 }
 // 溫度條的顏色：冷的偏藍綠、熱的偏橘紅（像 Apple 天氣）
 function tempColor(t) {
-  const stops = [[4, "#64c8f0"], [9, "#6fd0c8"], [13, "#8ed4a8"], [17, "#b3d777"], [21, "#e3d44e"], [25, "#f6bd3c"], [30, "#f58a3b"], [35, "#ff453a"]];
+  // 照 iPhone 天氣的顏色：零下藍、10 度青綠、20 度黃、28 度以上橘
+  const stops = [[-5, "#4f9be8"], [0, "#5ab4e8"], [5, "#6cc6dc"], [10, "#78d0c2"], [15, "#a2d38a"], [19, "#dccf4a"], [23, "#f3c23c"], [27, "#f39c37"], [32, "#ef6f39"]];
   for (const [v, c] of stops) if (t <= v) return c;
   return "#ff453a";
 }
@@ -393,11 +394,8 @@ function skyClass(code, isDay) {
   return "sky-storm";
 }
 // 晚上的晴天／少雲換成月亮
-const wIcon = (code, night = false) => {
-  const [, name, color] = weatherLook(code);
-  if (night && code <= 2) return `<span style="color:#fff">${icon("clear_night")}</span>`;
-  return `<span style="color:${color}">${icon(name)}</span>`;
-};
+// 彩色天氣圖示（renderer/wxicons.js）：白雲、黃太陽、藍雨滴…
+const wIcon = (code, night = false) => wxIcon(wxKind(code), night);
 
 let weatherAt = 0;
 async function loadWeather(force = false) {
@@ -440,13 +438,14 @@ WIDGETS.weather = {
     }
     const cur = data.current;
     let [desc, iconName, color] = weatherLook(cur.weather_code);
-    if (cur.is_day === 0 && cur.weather_code <= 2) { iconName = "clear_night"; color = "#fff"; if (cur.weather_code === 0) desc = "晴朗"; }
+    if (cur.is_day === 0 && cur.weather_code === 0) desc = "晴朗";
+    const bigIcon = wIcon(cur.weather_code, cur.is_day === 0);
     if (cur.desc) desc = esc(cur.desc); // 氣象署的說法（例如「多雲時晴」）
     pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
     const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
-        <div class="wt-top"><div class="wt-city">${esc(data.place || city.name)}</div><span class="wt-icon" style="color:${color}">${icon(iconName)}</span></div>
+        <div class="wt-top"><div class="wt-city">${esc(data.place || city.name)}</div><span class="wt-icon">${bigIcon}</span></div>
         <div class="wt-temp">${Math.round(cur.temperature_2m)}°</div>
         <div class="wt-desc"><span>${desc}</span><small>${range}</small></div></div>`);
       return;
@@ -477,11 +476,93 @@ WIDGETS.weather = {
     setHTML(pane, `<div class="wt">
       <div class="wt-top">
         <div><div class="wt-city">${esc(data.place || city.name)}</div><div class="wt-temp">${Math.round(cur.temperature_2m)}°</div></div>
-        <div class="wt-desc right"><span class="wt-icon" style="color:${color}">${icon(iconName)}</span><span>${desc}</span><small>${range}</small></div>
+        <div class="wt-desc right"><span class="wt-icon">${bigIcon}</span><span>${desc}</span><small>${range}</small></div>
       </div>
       <div class="wt-hours">${hours}</div>${days}</div>`);
   },
 };
+
+/* ───────── 空氣品質（美國 AQI，資料來自 Open-Meteo，免註冊） ───────── */
+// 等級、顏色、健康說明（跟 iPhone 天氣的空氣品質一樣用美國 AQI）
+const AQI_LEVELS = [
+  [50, "良好", "#34c759", "空氣品質令人滿意，空氣污染幾乎不會造成風險。"],
+  [100, "普通", "#ffcc00", "空氣品質尚可，但污染程度可能會對極少數人的健康造成輕度影響。對臭氧或懸浮微粒特別敏感的人可能會出現呼吸道症狀。"],
+  [150, "對敏感族群不健康", "#ff9500", "敏感族群（孩童、長者、有呼吸道疾病的人）可能會受到健康影響，一般大眾比較不容易受影響。"],
+  [200, "不健康", "#ff3b30", "每個人都可能開始出現健康影響，敏感族群可能比較嚴重。建議減少戶外活動。"],
+  [300, "非常不健康", "#af52de", "健康警報：每個人都可能出現比較嚴重的健康影響。"],
+  [Infinity, "危害", "#8e1b3a", "緊急健康警告：所有人都比較容易受到影響，請避免戶外活動。"],
+];
+const aqiLevel = (v) => AQI_LEVELS.find(([max]) => v <= max);
+const AQI_POLLUTANTS = [
+  ["pm2_5", "PM2.5", "2.5µm 以下的微粒"], ["pm10", "PM10", "10µm 以下的微粒"],
+  ["ozone", "O₃", "臭氧"], ["nitrogen_dioxide", "NO₂", "二氧化氮"],
+];
+// 色條上的位置（0～500）
+const aqiPos = (v) => Math.min(100, Math.max(0, (v / 500) * 100));
+
+let aqiAt = 0;
+async function loadAqi(force = false) {
+  const needed = [...instances.values()].some((i) => i.panes.has("aqi"));
+  if (!needed || paused || (!force && Date.now() - aqiAt < 30 * 60 * 1000)) return;
+  aqiAt = Date.now();
+  const city = store.city || (await api.getState()).city;
+  store.city = city;
+  try {
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${city.lat}&longitude=${city.lon}` +
+      "&current=us_aqi,us_aqi_pm2_5,us_aqi_pm10,us_aqi_ozone,us_aqi_nitrogen_dioxide,pm2_5,pm10,ozone,nitrogen_dioxide" +
+      "&hourly=us_aqi&past_days=1&forecast_days=1&timezone=auto";
+    store.aqi = await (await fetch(url)).json();
+    store.aqiError = false;
+  } catch {
+    store.aqiError = true;
+    aqiAt = Date.now() - 28 * 60 * 1000; // 沒網路：2 分鐘後再試
+  }
+  refresh("aqi");
+}
+setInterval(() => loadAqi(), 60 * 1000);
+api.onWeatherRefresh?.(() => loadAqi(true));
+
+WIDGETS.aqi = {
+  render(pane, inst) {
+    const d = store.aqi, cur = d?.current;
+    const head = `<div class="aq-head">${AQI_DOTS}<span>空氣品質</span></div>`;
+    if (!cur || cur.us_aqi == null) {
+      setHTML(pane, `<div class="aq">${head}<div class="aq-desc" style="margin-top:auto">${store.aqiError ? "沒有網路" : "讀取中…"}</div></div>`);
+      loadAqi();
+      return;
+    }
+    const v = Math.round(cur.us_aqi);
+    const [, name, color, health] = aqiLevel(v);
+    const bar = `<div class="aq-bar"><b style="left:${aqiPos(v)}%"></b></div>`;
+    // 跟昨天這個時候比
+    let compare = "";
+    const times = d.hourly?.time || [];
+    const idx = times.findIndex((t) => new Date(t) > new Date()) - 1;
+    const y = idx >= 24 ? d.hourly.us_aqi[idx - 24] : null;
+    if (y != null) compare = Math.abs(v - y) <= 10 ? "，與昨天此時相近" : v < y ? "，比昨天此時好" : "，比昨天此時差";
+    // 主要污染物：子指標最高的那個
+    const main = AQI_POLLUTANTS.map(([k, label, full]) => [cur["us_aqi_" + k] ?? -1, label, full, k]).sort((a, b) => b[0] - a[0])[0];
+    if (inst.size === "s") {
+      setHTML(pane, `<div class="aq">${head}<div class="aq-num">${v}</div><div class="aq-name" style="color:${color}">${name}</div>${bar}</div>`);
+      return;
+    }
+    const sentence = `<div class="aq-desc">空氣品質指標為 ${v}${compare}。</div>`;
+    if (inst.size === "m") {
+      setHTML(pane, `<div class="aq">${head}<div class="aq-row"><span class="aq-num">${v}</span><span class="aq-name" style="color:${color}">${name}</span></div>${sentence}${bar}</div>`);
+      return;
+    }
+    const list = AQI_POLLUTANTS.map(([k, label]) => cur[k] == null ? "" :
+      `<div class="aq-pol ${k === main[3] ? "main" : ""}"><span>${label}</span><b>${Math.round(cur[k])}</b><small>µg/m³</small></div>`).join("");
+    setHTML(pane, `<div class="aq">${head}<div class="aq-row"><span class="aq-num">${v}</span><span class="aq-name" style="color:${color}">${name}</span></div>
+      ${sentence}${bar}
+      <div class="aq-health">${health}</div>
+      <div class="aq-sub">主要污染物：${main[1]}（${main[2]}）</div>
+      <div class="aq-pols">${list}</div></div>`);
+  },
+};
+// 跟 iPhone 一樣的小點點圖示
+const AQI_DOTS = `<svg class="aq-dots" viewBox="0 0 16 16" aria-hidden="true">${[[8, 2], [4.5, 4], [11.5, 4], [2.5, 8], [8, 6], [13.5, 8], [5.5, 8], [10.5, 8], [8, 10], [4.5, 12], [11.5, 12], [8, 14]]
+  .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1"/>`).join("")}</svg>`;
 
 /* ───────── 電量 ───────── */
 // 藍牙只會回報電量，不會說有沒有在充電；電量往上升就當作在充電（下降或 15 分鐘沒再升就取消）
@@ -778,4 +859,4 @@ navigator.getBattery?.().then((b) => {
   b.addEventListener("chargingchange", read);
 });
 // 新加了天氣或 Pinterest 小組件時，馬上去抓資料
-api.onHostLayout?.(() => setTimeout(() => { loadWeather(); if (!store.pins) loadPins(); }, 50));
+api.onHostLayout?.(() => setTimeout(() => { loadWeather(); loadAqi(); if (!store.pins) loadPins(); }, 50));

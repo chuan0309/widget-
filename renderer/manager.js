@@ -44,6 +44,7 @@ window.api.onGoto((section) => go(section));
 const WIDGET_INFO = [
   { kind: "clock", name: "時鐘", icon: "schedule" },
   { kind: "weather", name: "天氣", icon: "partly_cloudy" },
+  { kind: "aqi", name: "空氣品質", icon: "foggy" },
   { kind: "battery", name: "電量", icon: "buds" },
   { kind: "audio", name: "音訊輸出", icon: "speaker" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
