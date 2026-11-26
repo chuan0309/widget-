@@ -310,6 +310,36 @@ function Get-AudioJson {
   return $json
 }
 
+# ===== Stdin reader =====
+# [Console]::In.ReadLineAsync() blocks in Windows PowerShell 5.1, so read stdin on a
+# background thread and let the main loop pick up finished lines without waiting.
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Text;
+using System.Threading;
+public static class StdinPump {
+  static readonly ConcurrentQueue<string> lines = new ConcurrentQueue<string>();
+  static volatile bool closed;
+  public static bool Closed { get { return closed && lines.IsEmpty; } }
+  public static void Start() {
+    var t = new Thread(() => {
+      try {
+        var r = new StreamReader(Console.OpenStandardInput(), new UTF8Encoding(false));
+        string l;
+        while ((l = r.ReadLine()) != null) lines.Enqueue(l);
+      } catch {}
+      closed = true;
+    });
+    t.IsBackground = true;
+    t.Start();
+  }
+  public static string Next() { string l; return lines.TryDequeue(out l) ? l : null; }
+}
+'@
+[StdinPump]::Start()
+
 # ===== Main loop =====
 $last = @{ bt = ''; audio = '' }
 $due = @{ bt = [datetime]::MinValue; audio = [datetime]::MinValue }
@@ -321,19 +351,16 @@ function Emit([string]$kind, [string]$json) {
   }
 }
 
-$readTask = [Console]::In.ReadLineAsync()
 while ($true) {
   # Commands from main.js (checked often so pinning feels instant)
-  while ($readTask.IsCompleted) {
-    $line = $readTask.Result
-    if ($line -eq $null) { exit }   # main.js went away
+  if ([StdinPump]::Closed) { exit }   # main.js went away
+  while (($line = [StdinPump]::Next()) -ne $null) {
     if ($line -match '^pin (\d+)$') {
       try { [DesktopPin]::Pin([long]$Matches[1]) } catch {}
     } elseif ($line -match '^audio-set (.+)$') {
       try { $null = [GlassWidgets.Audio]::SetDefault($Matches[1].Trim()) } catch {}
       $due.audio = [datetime]::MinValue   # report the new default right away
     }
-    $readTask = [Console]::In.ReadLineAsync()
   }
 
   $now = Get-Date

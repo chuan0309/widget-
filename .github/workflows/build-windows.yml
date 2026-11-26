@@ -44,7 +44,7 @@ jobs:
             Write-Host "compiled C# block"
           }
           # 跑 8 秒，至少要回報一次裝置清單（雲端電腦可能沒有音效卡，所以藍牙或音訊其中一個就好）
-          $out = cmd /c "powershell -NoProfile -Command Start-Sleep 8 | powershell -NoProfile -ExecutionPolicy Bypass -File helper.ps1"
+          $out = cmd /c "powershell -NoProfile -Command Start-Sleep 8 | powershell -NoProfile -ExecutionPolicy Bypass -File helper.ps1 2>&1"
           Write-Host ($out -join "`n")
           if (-not ($out | Where-Object { $_ -match '^(audio|bt) ' })) { throw 'helper.ps1 did not report anything' }
 
