@@ -187,18 +187,48 @@ function startWatcher() {
   });
 }
 
-function handleDevices(next) {
+// 有些裝置（iPhone、部分耳機）在 Windows 裡會出現兩筆：傳統藍牙＋低功耗藍牙，合併成一筆
+function mergeSameDevice(list) {
+  const byName = new Map();
+  for (const d of list) {
+    const key = String(d.name).trim().toLowerCase();
+    const prev = byName.get(key);
+    if (!prev) { byName.set(key, { ...d }); continue; }
+    prev.connected = prev.connected || d.connected;
+    if (prev.battery == null) prev.battery = d.battery;
+    prev.cod = prev.cod || d.cod;
+    prev.le = prev.le || d.le;
+  }
+  return [...byName.values()];
+}
+
+const LOW_BATTERY = 20;
+const lowAlerted = new Set();
+
+function handleDevices(raw) {
+  const next = mergeSameDevice(raw);
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;
   broadcast("devices", devices);
 
-  if (firstSnapshot) { firstSnapshot = false; return; } // 開程式前就連著的不跳通知
+  const first = firstSnapshot;
+  firstSnapshot = false;
   for (const d of next) {
-    if (d.connected && !wasConnected.has(d.id)) showPopup(d);
+    // 新連上的裝置 → 跳通知（開程式前就連著的不跳）
+    if (!first && d.connected && !wasConnected.has(d.id)) showPopup(d);
+
+    // 電量低 → 跳一次提醒，充回 25% 以上才會再提醒
+    if (d.connected && d.battery != null && d.battery <= LOW_BATTERY && !lowAlerted.has(d.id)) {
+      lowAlerted.add(d.id);
+      showPopup({ ...d, alert: "low" });
+    } else if (d.battery != null && d.battery > LOW_BATTERY + 5) {
+      lowAlerted.delete(d.id);
+    }
+
     // 通知還開著時，電量晚一點才讀到就順便更新
     if (popupDevice && d.id === popupDevice.id && popup && !popup.isDestroyed()) {
-      popupDevice = d;
-      popup.webContents.send("popup:device", d);
+      popupDevice = { ...d, alert: popupDevice.alert };
+      popup.webContents.send("popup:device", popupDevice);
     }
   }
 }

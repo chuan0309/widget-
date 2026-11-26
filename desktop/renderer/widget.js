@@ -60,10 +60,10 @@ let pcBattery = null; // { level, charging, isDesktop }
 let btDevices = [];
 
 function ringHTML(percent, iconType, label, sub, extraClass = "") {
-  const low = percent != null && percent <= 20 ? "low" : "";
+  const state = percent == null ? "unknown" : percent <= 20 ? "low" : "";
   return `
     <div class="batt-item ${extraClass}">
-      <div class="ring ${low}" style="--p:${percent ?? 0}">${deviceIcon(iconType)}</div>
+      <div class="ring ${state}" style="--p:${percent ?? 100}">${deviceIcon(iconType)}</div>
       <span>${label}</span>
       ${sub ? `<small>${sub}</small>` : ""}
     </div>`;
@@ -71,23 +71,48 @@ function ringHTML(percent, iconType, label, sub, extraClass = "") {
 
 const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-function renderBattery() {
+// 一頁放 4 個，超過就自動翻頁
+const PER_PAGE = 4;
+let battPage = 0;
+let battTimer = null;
+
+function batteryItems() {
   const items = [];
   if (pcBattery) {
+    const pct = Math.round(pcBattery.level * 100);
     items.push(pcBattery.isDesktop
       ? ringHTML(100, "pc", "插電中", "這台電腦")
-      : ringHTML(Math.round(pcBattery.level * 100), "laptop",
-          `${Math.round(pcBattery.level * 100)}%`, pcBattery.charging ? "充電中" : "這台電腦"));
+      : ringHTML(pct, "laptop", `${pct}%`, pcBattery.charging ? "充電中" : "這台電腦"));
   }
-  const connected = btDevices.filter((d) => d.connected).slice(0, 3);
+  const connected = btDevices
+    .filter((d) => d.connected)
+    // 有電量的排前面，電量低的最前面
+    .sort((a, b) => (a.battery ?? 101) - (b.battery ?? 101));
   for (const d of connected) {
     const label = d.battery != null ? `${d.battery}%` : "已連線";
-    items.push(ringHTML(d.battery ?? 100, deviceType(d.name), label, escapeHTML(d.name)));
+    items.push(ringHTML(d.battery, deviceType(d.name, d.cod), label, escapeHTML(d.name)));
   }
-  if (connected.length === 0) {
-    items.push(ringHTML(0, "other", "—", "沒有藍牙裝置", "placeholder"));
+  if (connected.length === 0) items.push(ringHTML(0, "other", "—", "沒有藍牙裝置", "placeholder"));
+  return items;
+}
+
+function renderBattery() {
+  const items = batteryItems();
+  const pages = Math.ceil(items.length / PER_PAGE);
+  if (battPage >= pages) battPage = 0;
+  $("battRow").innerHTML = items.slice(battPage * PER_PAGE, (battPage + 1) * PER_PAGE).join("");
+  $("battDots").innerHTML = pages > 1
+    ? Array.from({ length: pages }, (_, i) => `<i class="${i === battPage ? "on" : ""}"></i>`).join("")
+    : "";
+
+  clearInterval(battTimer);
+  if (pages > 1) {
+    battTimer = setInterval(() => {
+      if (document.querySelector(".battery:hover")) return; // 滑鼠在上面就不要翻
+      battPage = (battPage + 1) % pages;
+      renderBattery();
+    }, 6000);
   }
-  $("battRow").innerHTML = items.join("");
 }
 
 async function initBattery() {

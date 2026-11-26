@@ -17,6 +17,7 @@ h1 {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sub { margin-top: 2px; font-size: 13px; color: var(--ok); font-weight: 600; }
+.sub.low { color: #ff453a; }
 
 .art { position: relative; width: 200px; height: 170px; margin: 12px 0 6px; display: grid; place-items: center; }
 

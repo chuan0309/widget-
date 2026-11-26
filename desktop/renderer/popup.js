@@ -10,8 +10,11 @@ let shownType = null;
 function render(device) {
   if (!device) return;
   $("name").textContent = device.name;
+  const low = device.alert === "low";
+  $("sub").textContent = low ? "電量偏低，記得充電" : "已連線";
+  $("sub").classList.toggle("low", low);
 
-  const type = deviceType(device.name);
+  const type = deviceType(device.name, device.cod);
   if (type !== shownType) { // 同一台裝置更新電量時，插圖不要重新閃一次
     $("art").innerHTML = type === "buds" ? BUDS_ART : `<div class="orb">${deviceIcon(type)}</div>`;
     shownType = type;
