@@ -738,6 +738,7 @@ function renderPhone(info) {
   $("phStatus").textContent = st;
   $("phPlug").textContent = info.plugUrl;
   $("phUnplug").textContent = info.unplugUrl;
+  $("phWatch").textContent = info.watchUrl;
 }
 const phRefresh = () => window.api.phoneInfo?.().then(renderPhone);
 phRefresh();

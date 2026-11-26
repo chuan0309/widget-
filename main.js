@@ -580,6 +580,8 @@ function evaluateDevices() {
     return out;
   });
   next.push(...podsDevices(now, next));
+  const w = phonePush.watch();
+  if (w && w.level != null) next.push({ id: "watch-push", name: "Apple Watch", connected: true, passive: true, cod: null, le: true, battery: w.level, charging: !!w.charging });
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;
@@ -952,6 +954,7 @@ const cwa = createCwa(settings, saveSettings, log);
 // iPhone 捷徑：一收到就馬上更新電量小組件；接上充電器時也跳一下瀏海通知
 const phonePush = createPhonePush(settings, saveSettings, (st) => {
   evaluateDevices();
+  if (st.watch) return; // 手錶是手動點的，不用跳通知
   const phone = devices.find((d) => d.connected && /iphone/i.test(d.name));
   if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone || { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
   else if (phone && popupDevice?.id === phone.id && popup && !popup.isDestroyed()) popup.webContents.send("popup:device", popupPayload(phone));

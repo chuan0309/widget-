@@ -22,7 +22,7 @@ function lanAddresses() {
 
 function createPhonePush(settings, saveSettings, onUpdate, log = () => {}) {
   const S = () => (settings.phonePush ||= { on: false, token: "" });
-  let server = null, state = null, status = "off";
+  let server = null, state = null, watch = null, status = "off";
 
   const token = () => {
     if (!S().token) { S().token = crypto.randomBytes(9).toString("base64url"); saveSettings(); }
@@ -41,13 +41,18 @@ function createPhonePush(settings, saveSettings, onUpdate, log = () => {}) {
     // 電量：捷徑的「電池電量」可能是 63、63.0 或 0.63
     let level = Number(String(url.searchParams.get("level") || "").replace(/[^\d.]/g, ""));
     if (Number.isFinite(level) && level > 0 && level <= 1 && String(url.searchParams.get("level")).includes(".")) level *= 100;
-    state = {
-      charging: c == null ? state?.charging ?? null : /^(1|true|yes|on)$/i.test(c),
-      level: Number.isFinite(level) && level > 0 && level <= 100 ? Math.round(level) : state?.level ?? null,
+    // device=watch：Apple Watch 自己的捷徑傳來的（手錶沒辦法自動傳，要在手錶上點一下）
+    const isWatch = /^watch$/i.test(url.searchParams.get("device") || "");
+    const prev = isWatch ? watch : state;
+    const next = {
+      charging: c == null ? prev?.charging ?? null : /^(1|true|yes|on)$/i.test(c),
+      level: Number.isFinite(level) && level > 0 && level <= 100 ? Math.round(level) : prev?.level ?? null,
       at: Date.now(),
+      watch: isWatch,
     };
-    log("phone push", state.charging, state.level);
-    onUpdate(state);
+    if (isWatch) watch = next; else state = next;
+    log(isWatch ? "watch push" : "phone push", next.charging, next.level);
+    onUpdate(next);
     send(200, "ok");
   }
 
@@ -70,7 +75,7 @@ function createPhonePush(settings, saveSettings, onUpdate, log = () => {}) {
     info() {
       const ips = lanAddresses();
       const base = `http://${ips[0] || "電腦的IP"}:${PORT}/phone?t=${token()}`;
-      return { on: !!S().on, status, ips, port: PORT, plugUrl: `${base}&charging=1&level=`, unplugUrl: `${base}&charging=0&level=`, last: state };
+      return { on: !!S().on, status, ips, port: PORT, plugUrl: `${base}&charging=1&level=`, unplugUrl: `${base}&charging=0&level=`, watchUrl: `${base}&device=watch&level=`, last: state, lastWatch: watch };
     },
     // 捷徑傳來的狀態：充電狀態 12 小時內有效（拔掉時捷徑會再通知），電量 15 分鐘內比藍牙新
     current() {
@@ -80,6 +85,11 @@ function createPhonePush(settings, saveSettings, onUpdate, log = () => {}) {
         charging: age < 12 * 3600e3 ? state.charging : null,
         level: age < 15 * 60e3 ? state.level : null,
       };
+    },
+    // Apple Watch：6 小時內傳過才顯示（手錶是手動點的，太舊的電量沒意義）
+    watch() {
+      if (!watch || Date.now() - watch.at > 6 * 3600e3) return null;
+      return { level: watch.level, charging: watch.charging, mins: Math.round((Date.now() - watch.at) / 60000) };
     },
   };
 }
