@@ -31,11 +31,10 @@ const OAUTH = loadOAuthConfig();
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 const DEFAULTS = {
-  // "ios"：大圓角＋模糊桌布（像 iPhone）；"acrylic"：Windows 11 內建毛玻璃（圓角比較小）
-  glass: "ios",
+  glass: "ios", // 大圓角＋模糊桌布（像 iPhone）
   tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
-  widgets: { clock: true, weather: true, battery: true, audio: true, phone: true, calendar: true, pinterest: true },
-  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", phone: "m", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
+  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true },
+  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   weatherAuto: true, // 天氣自動定位
@@ -73,33 +72,32 @@ function saveSettings() {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
 }
 
-/* ───────── 小組件視窗 ───────── */
-const KINDS = ["battery", "clock", "weather", "audio", "phone", "calendar", "pinterest"]; // 也是預設排列的順序
+/* ───────── 小組件：全部放在「一個」透明視窗裡 ───────── */
+// 以前一個小組件一個視窗（每個都是一份瀏覽器，很吃記憶體）。現在整個主螢幕只有一個
+// 透明、點得穿的視窗，所有小組件都畫在裡面：記憶體少很多，拖動也只是畫面裡的移動，很順。
+const KINDS = ["battery", "clock", "weather", "audio", "calendar", "pinterest"]; // 也是預設排列的順序
 const SIZES = {
   s: { width: 170, height: 170, cols: 1, rows: 1 },
   m: { width: 356, height: 170, cols: 2, rows: 1 },
   l: { width: 356, height: 356, cols: 2, rows: 2 },
 };
 const CELL = 186; // 170 + 16 間距
-const widgetWins = {};
-// 視窗的 key：一般小組件就是種類名稱（"clock"），疊放是 "stack:<id>"
+const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest" };
+
+// 小組件的 key：一般小組件就是種類名稱（"clock"），疊放是 "stack:<id>"
 const stackOf = (key) => String(key).startsWith("stack:") ? (settings.stacks || []).find((st) => `stack:${st.id}` === key) : null;
 const sizeOf = (key) => {
   const v = stackOf(key)?.size ?? settings.sizes[key];
   return SIZES[v] ? v : "s";
 };
-const hostsKind = (key, kind) => key === kind || !!stackOf(key)?.items.includes(kind);
-// 傳訊息給「有顯示某種小組件」的所有視窗（單獨的、或在疊放裡的）
-function sendToKind(kind, channel, data) {
-  for (const [key, w] of Object.entries(widgetWins)) if (hostsKind(key, kind) && !w.isDestroyed()) w.webContents.send(channel, data);
-}
-function reloadKind(kind) {
-  for (const [key, w] of Object.entries(widgetWins)) if (hostsKind(key, kind) && !w.isDestroyed()) w.webContents.reload();
-}
 const widgetName = (key) => {
   const st = stackOf(key);
   return st ? `疊放：${st.items.map((k) => WIDGET_NAMES[k]).join("、")}` : WIDGET_NAMES[key];
 };
+const widgetKeys = () => [
+  ...KINDS.filter((k) => settings.widgets[k]),
+  ...(settings.stacks || []).map((st) => `stack:${st.id}`),
+];
 
 // 沒存過位置的小組件：從螢幕右上角開始，像 iPhone 主畫面一樣兩欄往下排
 function defaultPosition(kind) {
@@ -130,65 +128,91 @@ function defaultPosition(kind) {
   return { x: left, y: top };
 }
 
-function onSomeScreen({ x, y }) {
-  return screen.getAllDisplays().some(({ workArea: a }) =>
-    x >= a.x - 50 && y >= a.y - 50 && x < a.x + a.width - 50 && y < a.y + a.height - 50);
+let hostWin = null;
+let hostArea = null; // 視窗蓋住的範圍＝主螢幕扣掉工作列
+
+// 給畫面的排版：每個小組件在視窗裡的位置（相對座標），超出螢幕的拉回來
+function layoutItems() {
+  const a = hostArea;
+  return widgetKeys().map((key) => {
+    const size = sizeOf(key);
+    const { width, height } = SIZES[size];
+    const p = settings.positions[key] || defaultPosition(key);
+    const x = Math.min(Math.max(p.x - a.x, 0), a.width - width);
+    const y = Math.min(Math.max(p.y - a.y, 0), a.height - height);
+    const st = stackOf(key);
+    return { key, kinds: st ? st.items : [key], size, x, y, rotate: !!st?.rotate };
+  });
+}
+function sendLayout() {
+  if (hostWin && !hostWin.isDestroyed()) hostWin.webContents.send("host:layout", layoutItems());
 }
 
-function glassOptions() {
-  if (settings.glass === "acrylic") {
-    // 讓 Windows 11 自己畫毛玻璃（真的會把桌布模糊）
-    return { backgroundMaterial: "acrylic", titleBarStyle: "hidden", backgroundColor: "#00000000" };
-  }
-  return { transparent: true, frame: false, backgroundColor: "#00000000" };
+// 桌布在螢幕上的範圍（「跨螢幕延伸」的桌布以全部螢幕合起來算）
+function wallpaperArea() {
+  const display = screen.getPrimaryDisplay();
+  if (wallInfo?.mode !== "span") return { area: display.bounds, scale: display.scaleFactor };
+  const all = screen.getAllDisplays().map((d) => d.bounds);
+  const x = Math.min(...all.map((r) => r.x)), y = Math.min(...all.map((r) => r.y));
+  return {
+    area: { x, y, width: Math.max(...all.map((r) => r.x + r.width)) - x, height: Math.max(...all.map((r) => r.y + r.height)) - y },
+    scale: display.scaleFactor,
+  };
+}
+function sendHostInit() {
+  if (!hostWin || hostWin.isDestroyed()) return;
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint });
+  sendLayout();
 }
 
-function widgetQuery(key) {
-  const base = { size: sizeOf(key), glass: settings.glass, tint: String(settings.tint) };
-  const st = stackOf(key);
-  if (st) return { ...base, kind: "stack", items: st.items.join(","), rotate: st.rotate ? "1" : "0" };
-  return { ...base, kind: key };
+function createHost() {
+  hostArea = screen.getPrimaryDisplay().workArea;
+  hostWin = new BrowserWindow({
+    ...hostArea,
+    transparent: true, frame: false, backgroundColor: "#00000000", hasShadow: false,
+    resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    skipTaskbar: true, show: false,
+    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: true, spellcheck: false },
+  });
+  // 平常整個視窗點得穿；滑鼠移到小組件上時，畫面會請主程式暫時接收滑鼠
+  hostWin.setIgnoreMouseEvents(true, { forward: true });
+  hostWin.loadFile(path.join(__dirname, "renderer", "host.html"));
+  hostWin.webContents.on("did-finish-load", sendHostInit);
+  hostWin.once("ready-to-show", () => { hostWin.showInactive(); pinToDesktop(hostWin); });
+  // 點過小組件之後視窗會跑到最上面，點別的地方時就放回桌面那一層
+  hostWin.on("blur", () => { hostWin.setIgnoreMouseEvents(true, { forward: true }); pinToDesktop(hostWin); });
+  hostWin.on("closed", () => (hostWin = null));
+}
+
+function fitHostToScreen() {
+  if (!hostWin || hostWin.isDestroyed()) return;
+  hostArea = screen.getPrimaryDisplay().workArea;
+  hostWin.setBounds(hostArea);
+  sendHostInit();
+}
+
+ipcMain.on("host:interactive", (_e, on) => hostWin?.setIgnoreMouseEvents(!on, { forward: true }));
+ipcMain.on("host:move", (_e, key, x, y) => {
+  if (!hostArea || !widgetKeys().includes(key)) return;
+  settings.positions[key] = { x: Math.round(hostArea.x + Number(x)), y: Math.round(hostArea.y + Number(y)) };
+  saveSettings();
+});
+
+// 傳資料給小組件（全部都在同一個視窗）
+function sendToKind(_kind, channel, data) {
+  if (hostWin && !hostWin.isDestroyed()) hostWin.webContents.send(channel, data);
+}
+function reloadKind(kind) {
+  if (kind === "weather") sendToKind("weather", "weather:refresh");
 }
 
 // 拖動透明度滑桿時，桌面上的小組件即時跟著變
 function setTint(value, save) {
   settings.tint = Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
-  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send("glass:tint", settings.tint);
+  sendToKind(null, "glass:tint", settings.tint);
   if (save) saveSettings();
 }
 ipcMain.on("glass:tint-preview", (_e, v) => setTint(v, false));
-
-function createWidget(kind) {
-  const saved = settings.positions[kind];
-  const pos = saved && onSomeScreen(saved) ? saved : defaultPosition(kind);
-  const { width, height } = SIZES[sizeOf(kind)];
-  const win = new BrowserWindow({
-    width, height,
-    ...pos,
-    ...glassOptions(),
-    resizable: false,
-    maximizable: false,
-    minimizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    show: false,
-    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: true },
-  });
-  win.loadFile(path.join(__dirname, "renderer", "widget.html"), { query: widgetQuery(kind) });
-  win.once("ready-to-show", () => { win.showInactive(); pinToDesktop(win); });
-  // 拖動時一直更新背景桌布的位置，玻璃後面的畫面才會對得上
-  win.on("move", () => sendBackdrop(win));
-  win.webContents.on("did-finish-load", () => sendBackdrop(win, true));
-  win.on("moved", () => {
-    const [x, y] = win.getPosition();
-    settings.positions[kind] = { x, y };
-    saveSettings();
-  });
-  // 點過小組件之後它會跑到最上面，點別的地方時就把它放回桌面那一層
-  win.on("blur", () => pinToDesktop(win));
-  win.on("closed", () => delete widgetWins[kind]);
-  widgetWins[kind] = win;
-}
 
 function setWidgetSize(kind, size) {
   if (!SIZES[size]) return;
@@ -196,132 +220,77 @@ function setWidgetSize(kind, size) {
   if (st) st.size = size; else settings.sizes[kind] = size;
   saveSettings();
   managerWin?.webContents.send("mgr:refresh");
-  const win = widgetWins[kind];
-  if (!win || win.isDestroyed()) return;
-  const [x, y] = win.getPosition();
-  win.setBounds({ x, y, width: SIZES[size].width, height: SIZES[size].height });
-  win.loadFile(path.join(__dirname, "renderer", "widget.html"), { query: widgetQuery(kind) });
+  sendLayout();
 }
 
-const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", phone: "手機連結", calendar: "Google 日曆", pinterest: "Pinterest" };
-
-// 拖動小組件：畫面告訴主程式滑鼠移了多少，主程式移動視窗
-const dragging = new Map(); // webContents id → 開始拖的時候視窗的位置
-ipcMain.on("widget:drag-start", (e) => {
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (win) dragging.set(e.sender.id, win.getPosition());
-});
-ipcMain.on("widget:drag-move", (e, dx, dy) => {
-  const start = dragging.get(e.sender.id);
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (!start || !win || win.isDestroyed()) return;
-  win.setPosition(Math.round(start[0] + Number(dx)), Math.round(start[1] + Number(dy)));
-});
-ipcMain.on("widget:drag-end", (e) => {
-  dragging.delete(e.sender.id);
-  const win = BrowserWindow.fromWebContents(e.sender);
-  if (win && !win.isDestroyed()) win.emit("moved"); // 存位置
-});
-
 // 在小組件上按右鍵
-ipcMain.on("widget:menu", (e) => {
-  const kind = Object.keys(widgetWins).find((k) => widgetWins[k].webContents === e.sender);
-  if (!kind) return;
-  const cur = sizeOf(kind);
+ipcMain.on("widget:menu", (e, key) => {
+  key = String(key);
+  if (!widgetKeys().includes(key)) return;
+  const cur = sizeOf(key);
   Menu.buildFromTemplate([
-    { label: widgetName(kind), enabled: false },
+    { label: widgetName(key), enabled: false },
     { type: "separator" },
-    { label: "小", type: "radio", checked: cur === "s", click: () => setWidgetSize(kind, "s") },
-    { label: "中", type: "radio", checked: cur === "m", click: () => setWidgetSize(kind, "m") },
-    { label: "大", type: "radio", checked: cur === "l", click: () => setWidgetSize(kind, "l") },
+    { label: "小", type: "radio", checked: cur === "s", click: () => setWidgetSize(key, "s") },
+    { label: "中", type: "radio", checked: cur === "m", click: () => setWidgetSize(key, "m") },
+    { label: "大", type: "radio", checked: cur === "l", click: () => setWidgetSize(key, "l") },
     { type: "separator" },
-    ...(stackOf(kind)
+    ...(stackOf(key)
       ? [
           { label: "編輯這個疊放…", click: () => openManager("widgets") },
-          { label: "移除這個疊放", click: () => { removeStack(kind); managerWin?.webContents.send("mgr:refresh"); } },
+          { label: "移除這個疊放", click: () => { removeStack(key); managerWin?.webContents.send("mgr:refresh"); } },
         ]
-      : [{ label: "移除這個小組件", click: () => { setWidgetEnabled(kind, false); saveSettings(); managerWin?.webContents.send("mgr:refresh"); } }]),
+      : [{ label: "移除這個小組件", click: () => { setWidgetEnabled(key, false); saveSettings(); managerWin?.webContents.send("mgr:refresh"); } }]),
     { label: "開啟 Glass Widgets", click: () => openManager("widgets") },
-  ]).popup({ window: BrowserWindow.fromWebContents(e.sender) });
+  ]).popup({ window: hostWin });
 });
 
 /* ───────── 小組件固定在「桌面那一層」───────── */
 // Chrome 之類的視窗永遠蓋在小組件上面；按 Win+D 也不會把小組件藏起來
-let pinner = null;
 function pinToDesktop(win) {
   if (process.platform !== "win32" || !win || win.isDestroyed()) return;
-  if (!pinner || pinner.exitCode !== null) {
-    const script = path.join(__dirname, "desktop-pin.ps1").replace("app.asar", "app.asar.unpacked");
-    pinner = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
-    pinner.on("error", () => (pinner = null));
-  }
   const handle = win.getNativeWindowHandle();
   const hwnd = handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
-  pinner.stdin.write(hwnd.toString() + "\n");
+  helperSend(`pin ${hwnd}`);
 }
 
 /* ───────── 省電：螢幕鎖定、睡眠時小組件停止更新 ───────── */
 function setPaused(paused) {
-  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send("widget:paused", paused);
+  sendToKind(null, "widget:paused", paused);
 }
 
 /* ───────── 圓角毛玻璃：把模糊的桌布貼在小組件後面 ───────── */
 let wallInfo = null;
 let wallPrint = "";
 
-function backdropFor(win) {
-  const b = win.getBounds();
-  const display = screen.getDisplayMatching(b);
-  // 「跨螢幕延伸」的桌布是以全部螢幕合起來計算
-  let area = display.bounds;
-  if (wallInfo?.mode === "span") {
-    const all = screen.getAllDisplays().map((d) => d.bounds);
-    const x = Math.min(...all.map((r) => r.x)), y = Math.min(...all.map((r) => r.y));
-    area = {
-      x, y,
-      width: Math.max(...all.map((r) => r.x + r.width)) - x,
-      height: Math.max(...all.map((r) => r.y + r.height)) - y,
-    };
-  }
-  return { win: b, area, scale: display.scaleFactor };
-}
-
-function sendBackdrop(win, withImage = false) {
-  if (settings.glass !== "ios" || win.isDestroyed()) return;
-  const payload = backdropFor(win);
-  if (withImage) payload.wall = wallInfo;
-  win.webContents.send("backdrop", payload);
-}
-
 async function refreshWallpaper(force = false) {
   if (process.platform !== "win32") return;
-  const fp = await wallpaper.fingerprint().catch(() => "");
+  const fp = wallpaper.fingerprint();
   if (!force && fp === wallPrint) return;
   wallPrint = fp;
   wallInfo = await wallpaper.readWallpaper().catch(() => null);
-  for (const w of Object.values(widgetWins)) sendBackdrop(w, true);
+  sendHostInit();
 }
 
 function rebuildWidgets() {
-  Object.values(widgetWins).forEach((w) => w.destroy());
-  for (const kind of KINDS) if (settings.widgets[kind]) createWidget(kind);
-  for (const st of settings.stacks || []) createWidget(`stack:${st.id}`);
+  sendLayout();
 }
 
-// 疊放改了：把舊的疊放視窗關掉、照新的設定重開（位置會保留）
+// 疊放改了：重新排版就好
 function syncStacks() {
-  for (const [key, w] of Object.entries(widgetWins)) if (key.startsWith("stack:")) w.destroy();
-  for (const st of settings.stacks || []) createWidget(`stack:${st.id}`);
+  sendLayout();
 }
 function removeStack(key) {
   settings.stacks = (settings.stacks || []).filter((st) => `stack:${st.id}` !== key);
   delete settings.positions[key];
   saveSettings();
-  widgetWins[key]?.destroy();
+  sendLayout();
 }
 
 function showAllWidgets() {
-  Object.values(widgetWins).forEach((w) => w.showInactive());
+  if (!hostWin || hostWin.isDestroyed()) return createHost();
+  hostWin.showInactive();
+  pinToDesktop(hostWin);
 }
 
 /* ───────── 藍牙通知：MacBook 瀏海那樣，從螢幕正上方中間掉下來 ───────── */
@@ -330,7 +299,9 @@ let popup = null;
 let popupDevice = null;
 let popupTimer = null;
 
-// 通知視窗開程式時就先建好（藏起來），要用時直接顯示，不用等它載入
+// 通知視窗開程式時就建好，而且「一直開著」（完全透明、點得穿）。
+// 以前每次通知才把視窗秀出來，Windows 會先播一段淡入動畫，看起來會閃一塊灰色；
+// 現在視窗不藏也不秀，只有裡面的瀏海在動，就不會有那段多餘的動畫。
 let popupReady = false;
 function ensurePopup() {
   if (popup && !popup.isDestroyed()) return popup;
@@ -342,17 +313,24 @@ function ensurePopup() {
     transparent: true, frame: false, backgroundColor: "#00000000",
     resizable: false, movable: false, maximizable: false, minimizable: false, fullscreenable: false,
     skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false,
-    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: false },
+    webPreferences: { preload: path.join(__dirname, "preload.js"), sandbox: true, backgroundThrottling: false, spellcheck: false },
   });
   popup.setAlwaysOnTop(true, "screen-saver");
   popup.setIgnoreMouseEvents(true, { forward: true }); // 透明的地方點得穿，滑到瀏海上才接收
   popup.loadFile(path.join(__dirname, "renderer", "popup.html"));
   popup.webContents.once("did-finish-load", () => {
     popupReady = true;
-    if (popupDevice) { popup.showInactive(); popup.webContents.send("popup:device", popupDevice); }
+    popup.showInactive();
+    if (popupDevice) popup.webContents.send("popup:device", popupDevice);
   });
   popup.on("closed", () => { popup = null; popupReady = false; });
   return popup;
+}
+
+function placePopup() {
+  if (!popup || popup.isDestroyed()) return;
+  const { bounds } = screen.getPrimaryDisplay(); // 換過螢幕也對齊主螢幕正上方
+  popup.setPosition(Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), bounds.y);
 }
 
 function showPopup(device) {
@@ -360,10 +338,8 @@ function showPopup(device) {
   clearTimeout(popupTimer);
   const win = ensurePopup();
   if (popupReady) {
-    // 螢幕可能換過（接外接螢幕），每次都對齊主螢幕正上方
-    const { bounds } = screen.getPrimaryDisplay();
-    win.setPosition(Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), bounds.y);
-    win.showInactive();
+    placePopup();
+    win.setAlwaysOnTop(true, "screen-saver"); // 全螢幕程式之後也要在最上面
     win.webContents.send("popup:device", device);
   }
   popupTimer = setTimeout(hidePopup, 15000); // 保險：畫面自己收不起來時
@@ -371,72 +347,63 @@ function showPopup(device) {
 
 function hidePopup() {
   clearTimeout(popupTimer);
-  if (popup && !popup.isDestroyed()) popup.hide();
   popupDevice = null;
+  if (popup && !popup.isDestroyed()) {
+    popup.setIgnoreMouseEvents(true, { forward: true });
+    popup.webContents.send("popup:close");
+  }
 }
 
 ipcMain.on("popup:mouse", (_e, inside) => popup?.setIgnoreMouseEvents(!inside, { forward: true }));
 
-/* ───────── 偵測藍牙（背景跑 PowerShell）───────── */
+/* ───────── 背景小幫手（一個 PowerShell 負責藍牙、音訊、固定到桌面）───────── */
+// helper.ps1 會回報「bt <json>」「audio <json>」，也接受「pin <hwnd>」「audio-set <id>」
+let helper = null;
 let devices = [];
-let watcher = null;
 let firstSnapshot = true;
+const pendingHelper = []; // 小幫手還沒準備好時先排隊
 
-function startWatcher() {
+function startHelper() {
   if (process.platform !== "win32") return;
-  const script = path.join(__dirname, "bt-watch.ps1").replace("app.asar", "app.asar.unpacked");
-  watcher = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], {
-    windowsHide: true,
-  });
+  const script = path.join(__dirname, "helper.ps1").replace("app.asar", "app.asar.unpacked");
+  helper = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
+  for (const line of pendingHelper.splice(0)) helper.stdin.write(line + "\n");
   let buf = "";
-  watcher.stdout.setEncoding("utf8");
-  watcher.stdout.on("data", (chunk) => {
+  helper.stdout.setEncoding("utf8");
+  helper.stdout.on("data", (chunk) => {
     buf += chunk;
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim(); // PowerShell 有時會在最前面加 BOM
+      const line = buf.slice(0, i).replace(/^﻿/, "").trim(); // PowerShell 有時會在最前面加 BOM
       buf = buf.slice(i + 1);
-      if (line.startsWith("[")) handleDevices(JSON.parse(line));
+      const sp = line.indexOf(" ");
+      if (sp < 0) continue;
+      let data;
+      try { data = JSON.parse(line.slice(sp + 1)); } catch { continue; }
+      const kind = line.slice(0, sp);
+      if (kind === "bt" && Array.isArray(data)) handleDevices(data);
+      else if (kind === "audio" && Array.isArray(data)) handleAudio(data);
     }
   });
-  watcher.stderr.on("data", (d) => console.error("[bt-watch]", String(d)));
-  watcher.on("exit", (code) => {
-    watcher = null;
-    if (!app.isQuitting) setTimeout(startWatcher, 5000); // 掛掉就重開
+  helper.stderr.on("data", (d) => console.error("[helper]", String(d)));
+  helper.on("exit", () => {
+    helper = null;
+    if (!app.isQuitting) setTimeout(() => { startHelper(); if (hostWin) pinToDesktop(hostWin); }, 5000); // 掛掉就重開
   });
+}
+
+function helperSend(line) {
+  if (helper && helper.stdin.writable) helper.stdin.write(line + "\n");
+  else if (pendingHelper.length < 20) pendingHelper.push(line);
 }
 
 /* ───────── 音訊輸出：顯示目前用哪個、自動切換 ───────── */
-// audio.ps1 每 1.5 秒回報一次「有哪些輸出裝置、哪個是預設」，也接受「set <id>」切換預設
-let audioProc = null;
 let audioOutputs = [];
 let audioNames = ""; // 上一次「有哪些裝置」，用來判斷有沒有裝置接上或拔掉
 
-function startAudio() {
-  if (process.platform !== "win32") return;
-  const script = path.join(__dirname, "audio.ps1").replace("app.asar", "app.asar.unpacked");
-  audioProc = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
-  let buf = "";
-  audioProc.stdout.setEncoding("utf8");
-  audioProc.stdout.on("data", (chunk) => {
-    buf += chunk;
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim(); // PowerShell 有時會在最前面加 BOM
-      buf = buf.slice(i + 1);
-      if (line.startsWith("[")) { try { handleAudio(JSON.parse(line)); } catch {} }
-    }
-  });
-  audioProc.stderr.on("data", (d) => console.error("[audio]", String(d)));
-  audioProc.on("exit", () => {
-    audioProc = null;
-    if (!app.isQuitting) setTimeout(startAudio, 5000);
-  });
-}
-
 function setAudioOutput(id) {
-  if (!audioProc || !audioOutputs.some((o) => o.id === id)) return false;
-  audioProc.stdin.write(`set ${id}\n`);
+  if (!audioOutputs.some((o) => o.id === id)) return false;
+  helperSend(`audio-set ${id}`);
   return true;
 }
 
@@ -458,70 +425,6 @@ function handleAudio(list) {
   const best = a.priority.map((n) => audioOutputs.find((o) => o.name === n)).find(Boolean);
   if (best && !best.default) setAudioOutput(best.id);
 }
-
-/* ───────── 手機連結：讀 Phone Link 轉過來的手機通知 ───────── */
-// phone.ps1 每 4 秒看一次 Windows 通知中心的資料庫，有變化才回報
-let phoneProc = null;
-let phoneNotifs = [];
-let phoneError = "";
-const logoCache = new Map(); // 圖示路徑 → data URL
-const PHONE_LINK_DIR = path.join(process.env.LOCALAPPDATA || "", "Packages", "Microsoft.YourPhone_8wekyb3d8bbwe").toLowerCase();
-
-function phoneLogo(src) {
-  if (!src) return "";
-  let file = String(src).replace(/^ms-appdata:\/\/\/local\//i, "").replace(/^file:\/\/\/?/i, "");
-  try { file = decodeURIComponent(file); } catch {}
-  file = path.normalize(file);
-  // 只讀 Phone Link 自己資料夾裡的圖，別的路徑一律不碰
-  if (!file.toLowerCase().startsWith(PHONE_LINK_DIR)) return "";
-  if (logoCache.has(file)) return logoCache.get(file);
-  let url = "";
-  try {
-    const img = nativeImage.createFromPath(file);
-    if (!img.isEmpty()) url = img.resize({ width: 48, height: 48, quality: "good" }).toDataURL();
-  } catch {}
-  logoCache.set(file, url);
-  return url;
-}
-
-function startPhone() {
-  if (process.platform !== "win32") return;
-  const script = path.join(__dirname, "phone.ps1").replace("app.asar", "app.asar.unpacked");
-  phoneProc = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
-  let buf = "";
-  phoneProc.stdout.setEncoding("utf8");
-  phoneProc.stdout.on("data", (chunk) => {
-    buf += chunk;
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim();
-      buf = buf.slice(i + 1);
-      let data;
-      try { data = JSON.parse(line); } catch { continue; }
-      if (Array.isArray(data)) {
-        phoneError = "";
-        phoneNotifs = data.map((n) => ({
-          id: n.id, time: n.time, app: n.app || "",
-          title: n.texts?.[0] || "", body: (n.texts || []).slice(1).join("\n"),
-          logo: phoneLogo(n.logo),
-        }));
-      } else {
-        phoneError = data.error || "error";
-        phoneNotifs = [];
-      }
-      sendToKind("phone", "phone", { notifications: phoneNotifs, error: phoneError });
-    }
-  });
-  phoneProc.on("exit", () => {
-    phoneProc = null;
-    if (!app.isQuitting) setTimeout(startPhone, 10000);
-  });
-}
-ipcMain.handle("phone:get", () => ({ notifications: phoneNotifs, error: phoneError }));
-// 點小組件 → 打開 Windows 的「手機連結」
-ipcMain.on("phone:open", () => {
-  if (process.platform === "win32") spawn("explorer.exe", ["shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"], { detached: true });
-});
 
 ipcMain.handle("audio:get", () => ({ outputs: audioOutputs, auto: settings.audio.auto, priority: settings.audio.priority }));
 ipcMain.handle("audio:set", (_e, id) => setAudioOutput(String(id)));
@@ -606,7 +509,7 @@ function evaluateDevices() {
 setInterval(() => rawDevices.length && evaluateDevices(), 15 * 1000);
 
 function broadcast(channel, data) {
-  for (const w of [...Object.values(widgetWins), managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
+  for (const w of [hostWin, managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
 }
 
 /* ───────── 管理程式視窗 ───────── */
@@ -641,8 +544,7 @@ function openManager(section) {
 
 function setWidgetEnabled(kind, on) {
   settings.widgets[kind] = on;
-  if (on && !widgetWins[kind]) createWidget(kind);
-  if (!on) widgetWins[kind]?.destroy();
+  sendLayout();
 }
 
 function managerState() {
@@ -663,10 +565,7 @@ function managerState() {
 ipcMain.handle("mgr:get", managerState);
 ipcMain.handle("mgr:set", (_e, patch = {}) => {
   if (patch.widgets) for (const [k, v] of Object.entries(patch.widgets)) if (KINDS.includes(k)) setWidgetEnabled(k, !!v);
-  if (patch.glass && patch.glass !== settings.glass && ["ios", "acrylic"].includes(patch.glass)) {
-    settings.glass = patch.glass;
-    rebuildWidgets();
-  }
+  // 現在只有「圓角毛玻璃」一種（Windows 毛玻璃沒辦法用在共用的大視窗上）
   if (patch.bluetooth) {
     const b = patch.bluetooth;
     if ("notifyConnect" in b) settings.bluetooth.notifyConnect = !!b.notifyConnect;
@@ -962,7 +861,7 @@ ipcMain.handle("google:calendars", async () => {
   catch (e) { return { error: e.message, loginExpired: !!e.loginExpired }; }
 });
 ipcMain.handle("google:choose", (_e, id, on) => { google.chooseCalendar(String(id), !!on); return calendar.refresh(); });
-ipcMain.on("popup:close", hidePopup); // 瀏海收回去的動畫跑完了
+ipcMain.on("popup:close", () => { clearTimeout(popupTimer); popupDevice = null; popup?.setIgnoreMouseEvents(true, { forward: true }); }); // 瀏海收回去了
 
 /* ───────── 啟動 ───────── */
 if (!app.requestSingleInstanceLock()) {
@@ -977,12 +876,11 @@ if (!app.requestSingleInstanceLock()) {
     tray.setToolTip("Glass Widgets");
     tray.on("click", () => openManager());
     buildTrayMenu();
-    refreshWallpaper(true).finally(rebuildWidgets);
-    setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換
-    screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
-    startWatcher();
-    startAudio();
-    startPhone();
+    startHelper();
+    createHost();
+    refreshWallpaper(true);
+    setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換（只看檔案時間，很省）
+    for (const ev of ["display-metrics-changed", "display-added", "display-removed"]) screen.on(ev, fitHostToScreen);
     calendar.start();
     setupUpdater();
     startAutoLocate();
@@ -996,10 +894,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("before-quit", () => {
     app.isQuitting = true;
-    watcher?.kill();
-    pinner?.kill();
-    audioProc?.kill();
-    phoneProc?.kill();
+    helper?.kill();
   });
   app.on("window-all-closed", () => {}); // 關掉所有小組件也不要結束，留在系統匣
 }

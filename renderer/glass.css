@@ -12,104 +12,74 @@ html, body {
   overflow: hidden;
   color: var(--ink);
   font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font-feature-settings: "tnum"; /* 數字等寬，跳動時不會左右晃 */
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
 }
 [hidden] { display: none !important; }
-button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-app-region: no-drag; }
-
-/* 整個視窗就是一塊玻璃，按住任何地方都能拖動 */
-.card {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  contain: layout paint;
-  /* 拖動改由程式處理（widget.js），不用 -webkit-app-region，按鈕才不會被吃掉 */
-  touch-action: none;
-}
-
-/* ── 模式一：Windows 11 毛玻璃（模糊由系統負責，這裡只加高光和反光）── */
-.glass-acrylic .card {
-  border-radius: 8px; /* 跟 Windows 11 視窗圓角一樣 */
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 55%, rgba(255, 255, 255, 0.08)),
-    rgb(16 18 28 / calc(var(--t) * 0.55));
-  box-shadow:
-    inset 0 1.5px 1px rgba(255, 255, 255, 0.45),
-    inset 0 -1px 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 24px rgba(255, 255, 255, 0.06);
-}
-
-/* ── 模式二：圓角毛玻璃（像 iPhone）──
-   後面那層 .backdrop 是「模糊過的桌布」，由程式對準小組件在螢幕上的位置。
-   圓角用 superellipse，是蘋果那種「連續曲線」的圓角，不是一般的四分之一圓。 */
-/* --t 是透明程度：0 = 最透明（模糊少、幾乎不上色），1 = 顏色最深（模糊多、深色玻璃） */
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 body { --t: 0.3; }
-.glass-ios .card {
+
+/* ───────── 一個小組件＝一塊玻璃 ─────────
+   所有小組件都在同一個透明視窗裡，用 transform 擺位置（拖動時只有顯示卡在動，很順）。 */
+.card {
+  position: absolute; left: 0; top: 0;
   --r: 38px;
   border-radius: var(--r);
   corner-shape: superellipse(1.5);
-  background: rgba(28, 30, 40, 0.55); /* 還沒拿到桌布時的底色 */
-  /* 越透明，字的陰影越重，後面是亮的桌布也看得清楚 */
-  text-shadow: 0 1px 3px rgb(0 0 0 / calc(0.5 - var(--t) * 0.4));
-}
-.glass-ios .card.has-backdrop { background: transparent; }
-.glass-ios .card > .backdrop {
-  -webkit-app-region: none;
-  position: absolute;
-  z-index: 0;
-  pointer-events: none;
-  background-repeat: no-repeat;
+  overflow: hidden;
+  contain: layout style;
+  touch-action: none;
   will-change: transform;
-  filter: blur(calc(10px + var(--t) * 26px)) saturate(calc(1.9 - var(--t) * 0.5)) brightness(calc(1.06 - var(--t) * 0.1));
+  background: rgba(30, 32, 40, 0.5); /* 還沒拿到桌布時的底色 */
+  /* 像 macOS 的小組件：底下一層很淡的影子，浮在桌布上 */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12);
+  text-shadow: 0 1px 2px rgb(0 0 0 / calc(0.4 - var(--t) * 0.3));
+}
+.card.dragging { z-index: 10; cursor: grabbing; box-shadow: 0 22px 50px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2); }
+.card.snapping { transition: transform 0.28s cubic-bezier(0.32, 1.2, 0.45, 1); }
+
+/* 模糊的桌布（只模糊小組件後面那一塊，多留一點邊） */
+.card > .backdrop {
+  position: absolute; left: -48px; top: -48px; right: -48px; bottom: -48px;
+  z-index: 0; pointer-events: none;
+  background-repeat: no-repeat;
+  filter: blur(calc(14px + var(--t) * 22px)) saturate(calc(1.8 - var(--t) * 0.5)) brightness(calc(1.04 - var(--t) * 0.12));
 }
 
-/* 玻璃邊的漸層光（放在最上層） */
+/* 玻璃本身：越透明越清澈；往「不同色調」越深 */
+.card::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-radius: inherit; corner-shape: inherit;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.02)),
+    rgb(18 20 28 / calc(0.06 + var(--t) * 0.6));
+}
+/* 玻璃邊：左上亮、右下帶一點反光，像 iOS 26 的液態玻璃 */
 .card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  /* 不能蓋在按鈕上面：Windows 會把這層當成「拖動視窗」的區域，按鈕就點不到了 */
-  z-index: 1;
-  -webkit-app-region: none;
-  border-radius: inherit;
-  corner-shape: inherit;
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  border-radius: inherit; corner-shape: inherit;
   padding: 1px;
-  background: linear-gradient(140deg,
-    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.08) 35%,
-    rgba(255, 255, 255, 0.04) 65%, rgba(255, 255, 255, 0.45));
+  background: linear-gradient(145deg,
+    rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 30%,
+    rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.3));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  pointer-events: none;
-}
-/* 玻璃本身的顏色＋左上角的柔光（在桌布上面、文字下面） */
-.card::after {
-  content: "";
-  -webkit-app-region: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  corner-shape: inherit;
-  background: radial-gradient(120% 70% at 20% 0%, rgba(255, 255, 255, 0.18), transparent 55%);
-  pointer-events: none;
-}
-.glass-ios .card::after {
-  background:
-    radial-gradient(120% 70% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 60%, rgba(255, 255, 255, 0.08)),
-    rgb(16 18 28 / calc(0.04 + var(--t) * 0.66));
-  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.5), inset 0 -1px 1px rgba(255, 255, 255, 0.15);
 }
 
-.card > * { position: relative; z-index: 1; }
+/* 小組件內容 */
+.pane { position: absolute; inset: 0; z-index: 1; }
 
-/* 打開時的彈出動畫 */
-.card { animation: rise 0.6s var(--ease-spring) both; }
+/* 第一次出現時的動畫（只播一次，之後更新內容不會再播） */
+.card.enter { animation: rise 0.55s var(--ease-spring) both; }
 @keyframes rise {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; scale: 0.92; }
+  to { opacity: 1; scale: 1; }
 }
+
+/* 被蓋住或螢幕鎖定時：所有動畫停下來，省電 */
+body.paused *, body.paused *::before, body.paused *::after { animation-play-state: paused !important; }
 
 /* 電量圓環（widget 跟通知共用）*/
 @property --p { syntax: "<number>"; inherits: true; initial-value: 0; }

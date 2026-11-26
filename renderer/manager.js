@@ -46,7 +46,6 @@ const WIDGET_INFO = [
   { kind: "weather", name: "天氣", icon: "partly_cloudy" },
   { kind: "battery", name: "電量", icon: "buds" },
   { kind: "audio", name: "音訊輸出", icon: "speaker" },
-  { kind: "phone", name: "手機連結", icon: "phone" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
   { kind: "pinterest", name: "Pinterest", icon: "pin" },
 ];
@@ -130,25 +129,11 @@ $("resetPos").addEventListener("click", () => { window.api.mgrResetPositions(); 
 function renderLook() {
   $("tint").value = state.settings.tint ?? 30;
   showTint($("tint").value);
-  // 透明程度滑桿：拖的時候即時預覽（不存檔），放開時才存
-function showTint(v) { $("tintPreview").style.setProperty("--t", String(v / 100)); }
-$("tint").addEventListener("input", (e) => { showTint(e.target.value); window.api.previewTint(Number(e.target.value)); });
-$("tint").addEventListener("change", (e) => save({ tint: Number(e.target.value) }));
-
-document.querySelectorAll(".look-card").forEach((c) => c.classList.toggle("on", c.dataset.glass === state.settings.glass));
-  const acrylic = document.querySelector('.look-card[data-glass="acrylic"]');
-  if (!state.isWin11) {
-    acrylic.disabled = true;
-    acrylic.querySelector("small").textContent = "需要 Windows 11（22H2 以上）。";
-  }
 }
 // 透明程度滑桿：拖的時候即時預覽（不存檔），放開時才存
 function showTint(v) { $("tintPreview").style.setProperty("--t", String(v / 100)); }
 $("tint").addEventListener("input", (e) => { showTint(e.target.value); window.api.previewTint(Number(e.target.value)); });
 $("tint").addEventListener("change", (e) => save({ tint: Number(e.target.value) }));
-
-document.querySelectorAll(".look-card").forEach((c) =>
-  c.addEventListener("click", () => save({ glass: c.dataset.glass }, "已套用")));
 
 /* ───────── 藍牙 ───────── */
 function renderBluetooth() {
