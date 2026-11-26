@@ -634,7 +634,7 @@ function batteryList() {
     // iPhone 捷徑有傳充電狀態就用那個（即時），不然用「電量有沒有變多」來猜
     const guess = chargingGuess(d.id, d.battery);
     const charging = typeof d.charging === "boolean" ? d.charging : guess;
-    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : "" }); // 充電中只看閃電，跟 iPhone 一樣不另外寫字
+    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : d.detail || "" }); // 充電中只看閃電，跟 iPhone 一樣不另外寫字
   }
   // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面
   const order = store.batteryPrefs.order || [];

@@ -454,13 +454,87 @@ public static class StdinPump {
 [StdinPump]::Start()
 
 # ===== Main loop =====
-$last = @{ bt = ''; audio = '' }
+$last = @{ bt = ''; audio = ''; pods = '' }
 $due = @{ bt = [datetime]::MinValue; audio = [datetime]::MinValue }
 function Emit([string]$kind, [string]$json) {
   if ($json -and $json -ne $last[$kind]) {
     [Console]::Out.WriteLine("$kind $json")
     [Console]::Out.Flush()
     $last[$kind] = $json
+  }
+}
+
+# ===== AirPods battery from their Bluetooth advertisements =====
+# AirPods that are NOT connected to this PC still broadcast an Apple "proximity pairing"
+# advertisement (the one that makes the iPhone show the battery card) while they are
+# out of the case or the lid is open. It holds left / right / case battery in 10% steps
+# and charging flags, so we can listen without pairing. Several nearby AirPods → keep
+# the strongest signal.
+$podsReady = $false
+$podsBest = $null
+try {
+  $null = [Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher, Windows.Devices.Bluetooth, ContentType = WindowsRuntime]
+  $podsWatcher = New-Object Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcher
+  $podsWatcher.ScanningMode = [Windows.Devices.Bluetooth.Advertisement.BluetoothLEScanningMode]::Passive
+  $null = Register-ObjectEvent -InputObject $podsWatcher -EventName Received -SourceIdentifier 'pods-adv'
+  $podsWatcher.Start()
+  $podsReady = $true
+  [Console]::Error.WriteLine("pods watcher started")
+} catch { [Console]::Error.WriteLine("pods watcher failed: $($_.Exception.Message)") }
+
+# Model id (bytes 3-4 of the packet) → name; unknown ids still work, just named "AirPods"
+$POD_MODELS = @{ 0x0220 = 'AirPods'; 0x0F20 = 'AirPods 2'; 0x1320 = 'AirPods 3'; 0x0E20 = 'AirPods Pro';
+  0x1420 = 'AirPods Pro 2'; 0x2420 = 'AirPods Pro 2'; 0x0A20 = 'AirPods Max'; 0x1F20 = 'AirPods Max';
+  0x1920 = 'AirPods 4'; 0x1B20 = 'AirPods 4'; 0x2720 = 'AirPods Pro 3' }
+
+function Read-PodsPacket($bytes, [int]$rssi) {
+  if ($bytes.Length -lt 9 -or $bytes[0] -ne 0x07) { return $null }
+  $model = ([int]$bytes[3] -shl 8) -bor [int]$bytes[4]
+  $flip = (($bytes[5] -shr 4) -band 0x02) -eq 0
+  $hi = ($bytes[6] -shr 4) -band 0x0F; $lo = $bytes[6] -band 0x0F
+  $l = if ($flip) { $hi } else { $lo }; $r = if ($flip) { $lo } else { $hi }
+  $c = $bytes[7] -band 0x0F; $chg = ($bytes[7] -shr 4) -band 0x0F
+  $pct = { param($v) if ($v -le 10) { $v * 10 } else { $null } }
+  return [ordered]@{
+    model = $model; name = $(if ($POD_MODELS.ContainsKey($model)) { $POD_MODELS[$model] } else { 'AirPods' })
+    left = (& $pct $l); right = (& $pct $r); case = (& $pct $c)
+    chargeLeft = (($chg -band $(if ($flip) { 2 } else { 1 })) -ne 0)
+    chargeRight = (($chg -band $(if ($flip) { 1 } else { 2 })) -ne 0)
+    chargeCase = (($chg -band 4) -ne 0)
+    rssi = $rssi
+  }
+}
+
+$podsRetry = [datetime]::MinValue
+function Update-Pods {
+  if (-not $podsReady) { return }
+  # Bluetooth turned off and on again → the watcher stops ("Aborted"); start it again
+  if ($podsWatcher.Status -eq [Windows.Devices.Bluetooth.Advertisement.BluetoothLEAdvertisementWatcherStatus]::Aborted -and (Get-Date) -ge $script:podsRetry) {
+    $script:podsRetry = (Get-Date).AddSeconds(30)
+    try { $podsWatcher.Start() } catch {}
+  }
+  $events = @(Get-Event -SourceIdentifier 'pods-adv' -ErrorAction SilentlyContinue)
+  $now = Get-Date
+  foreach ($ev in $events) {
+    try {
+      $a = $ev.SourceEventArgs
+      foreach ($m in $a.Advertisement.ManufacturerData) {
+        if ($m.CompanyId -ne 0x004C) { continue }
+        $bytes = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions]::ToArray($m.Data)
+        $p = Read-PodsPacket $bytes ([int]$a.RawSignalStrengthInDBm)
+        if (-not $p -or ($p.left -eq $null -and $p.right -eq $null)) { continue }
+        # keep the strongest AirPods; switch to a weaker one only after 30 s without the strong one
+        if (-not $podsBest -or $p.rssi -ge $podsBest.p.rssi - 3 -or ($now - $podsBest.at).TotalSeconds -gt 30) {
+          $script:podsBest = @{ p = $p; at = $now }
+        }
+      }
+    } catch {}
+    Remove-Event -EventIdentifier $ev.EventIdentifier -ErrorAction SilentlyContinue
+  }
+  if ($podsBest) {
+    $out = [ordered]@{}; foreach ($k in $podsBest.p.Keys) { if ($k -ne 'rssi') { $out[$k] = $podsBest.p[$k] } }
+    $out.seen = $podsBest.at.ToString('HH:mm')   # changes once a minute so main.js knows they are still around
+    Emit 'pods' (ConvertTo-Json -InputObject $out -Compress)
   }
 }
 
@@ -479,5 +553,6 @@ while ($true) {
   $now = Get-Date
   if ($now -ge $due.audio) { try { Emit 'audio' (Get-AudioJson) } catch {}; $due.audio = $now.AddSeconds(2) }
   if ($now -ge $due.bt)    { try { Emit 'bt' (Get-BtJson) } catch {}; $due.bt = (Get-Date).AddSeconds($POLL_SECONDS) }
+  try { Update-Pods } catch {}
   Start-Sleep -Milliseconds 150
 }

@@ -453,6 +453,7 @@ function startHelper() {
       if (!reported.has(kind)) { reported.add(kind); log("helper first", kind, Array.isArray(data) ? data.length : "?"); }
       if (kind === "bt" && Array.isArray(data)) handleDevices(data);
       else if (kind === "audio" && Array.isArray(data)) handleAudio(data);
+      else if (kind === "pods" && data && typeof data === "object") handlePods(data);
     }
   });
   helper.stderr.on("data", (d) => log("helper stderr", String(d).slice(0, 500)));
@@ -530,6 +531,32 @@ const lastNotified = new Map(); // 裝置 id → 上次跳「已連線」通知�
 let rawDevices = [];
 let lastBroadcast = "";
 
+// AirPods 沒連這台電腦時，從它們的藍牙廣播讀到的電量（helper.ps1 的 pods）
+let pods = null; // { name, left, right, case, chargeLeft, chargeRight, chargeCase, model, at }
+const PODS_SHOW_MS = 3 * 3600e3; // 3 小時沒聽到就不顯示
+function handlePods(p) {
+  if (!pods || pods.model !== p.model) log("airpods seen", p.name, "model 0x" + Number(p.model).toString(16));
+  pods = { ...p, at: Date.now() };
+  if (!firstSnapshot) evaluateDevices(); // 藍牙清單第一次到之前先不算（不然開程式時會亂跳連線通知）
+}
+function podsDevice(now, list) {
+  if (!pods || now - pods.at > PODS_SHOW_MS) return null;
+  // AirPods 真的連在這台電腦上、而且 Windows 讀得到電量，就用那個，不重複顯示
+  if (list.some((d) => d.connected && d.battery != null && /airpods/i.test(d.name))) return null;
+  const buds = [pods.left, pods.right].filter((v) => v != null);
+  if (!buds.length) return null;
+  const pct = (v) => (v == null ? "—" : v + "%");
+  const mins = Math.round((now - pods.at) / 60000);
+  const parts = [`左 ${pct(pods.left)}`, `右 ${pct(pods.right)}`];
+  if (pods.case != null) parts.push(`盒 ${pct(pods.case)}`);
+  return {
+    id: "airpods-adv", name: pods.name, connected: true, passive: true, cod: null, le: true,
+    battery: Math.min(...buds),
+    charging: !!(pods.chargeLeft || pods.chargeRight),
+    detail: parts.join(" · ") + (mins >= 2 ? `（${mins} 分鐘前）` : ""),
+  };
+}
+
 function handleDevices(raw) {
   rawDevices = mergeSameDevice(raw);
   evaluateDevices();
@@ -551,6 +578,8 @@ function evaluateDevices() {
     }
     return out;
   });
+  const pd = podsDevice(now, next);
+  if (pd) next.push(pd);
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
   devices = next;
@@ -561,6 +590,7 @@ function evaluateDevices() {
   firstSnapshot = false;
   const bt = settings.bluetooth;
   for (const d of next) {
+    if (d.passive) continue; // 廣播讀到的 AirPods 不跳連線／低電量通知（它們沒連這台電腦）
     const muted = !!bt.muted[d.id]; // 在管理程式裡關掉這台的通知
     // 真的新連上的裝置 → 跳通知（開程式前就連著的不跳）
     if (!first && d.connected && !wasConnected.has(d.id)) {
@@ -584,7 +614,7 @@ function evaluateDevices() {
   }
 }
 // 斷線 45 秒後要把狀態改成「未連線」，所以定時再檢查一次
-setInterval(() => rawDevices.length && evaluateDevices(), 15 * 1000);
+setInterval(() => (rawDevices.length || pods) && !firstSnapshot && evaluateDevices(), 15 * 1000);
 
 function broadcast(channel, data) {
   for (const w of [hostWin, managerWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
