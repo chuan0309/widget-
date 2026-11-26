@@ -30,6 +30,8 @@ const setBackground = (b) => {
 };
 setBackground("glass");
 api.onBackground?.(setBackground);
+const setFont = (w) => document.body.style.setProperty("--fw", String(w));
+api.onFont?.(setFont);
 
 /* ───────── 日期小工具 ───────── */
 const WEEK = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -106,7 +108,7 @@ api.onHostInit?.((d) => {
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
-  document.body.classList.toggle("font-light", d.fontWeight === "light");
+  if (d.fontWeight != null) setFont(d.fontWeight);
   if (d.pinInterval) store.pinInterval = d.pinInterval;
   if (Array.isArray(d.worldClocks)) { store.worldClocks = d.worldClocks; refresh("clock"); }
   for (const inst of instances.values()) layoutBackdrop(inst);

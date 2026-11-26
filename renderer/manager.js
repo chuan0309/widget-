@@ -133,14 +133,25 @@ function renderLook() {
   const bg = state.settings.background || "glass";
   document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
   $("tintBlock").hidden = bg !== "glass"; // 透明程度只有玻璃背景才有用
-  const fw = state.settings.fontWeight || "bold";
-  document.querySelectorAll("[data-font]").forEach((c) => c.classList.toggle("on", c.dataset.font === fw));
+  showFont(fwOf(state.settings.fontWeight));
 }
-document.querySelectorAll("[data-font]").forEach((c) => c.addEventListener("click", () => {
-  state.settings.fontWeight = c.dataset.font;
-  renderLook();
-  save({ fontWeight: c.dataset.font }, c.dataset.font === "light" ? "改成細體" : "改成粗體");
-}));
+const fwOf = (v) => (v === "light" ? 400 : v === "bold" || v == null ? 600 : Number(v) || 600);
+const FW_NAMES = { 300: "很細", 350: "細", 400: "細", 450: "標準", 500: "標準", 550: "中粗", 600: "粗", 650: "粗", 700: "很粗", 750: "很粗", 800: "最粗" };
+function showFont(w) {
+  $("fw").value = w;
+  $("fwSample").style.setProperty("--fw", w);
+  $("fwOut").textContent = `${FW_NAMES[w] || ""} ${w}`;
+}
+// 拖的時候小組件就跟著變（間隔一下，不要每一格都存檔）
+let fwTimer = null;
+$("fw").addEventListener("input", (e) => {
+  const w = Number(e.target.value);
+  showFont(w);
+  state.settings.fontWeight = w;
+  clearTimeout(fwTimer);
+  fwTimer = setTimeout(() => window.api.mgrSet({ fontWeight: w }), 60);
+});
+$("fw").addEventListener("change", (e) => save({ fontWeight: Number(e.target.value) }, "已儲存"));
 document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.addEventListener("click", () => {
   state.settings.background = c.dataset.bg;
   renderLook();

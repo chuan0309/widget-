@@ -349,10 +349,23 @@ select.select {
 select.select option { background: #2c2c2e; }
 
 .bg-grid.two { grid-template-columns: repeat(2, 1fr); max-width: 66%; }
-.bg-swatch.font { background: #1c1c1e; color: #fff; display: flex; flex-direction: column; gap: 2px; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
-.bg-swatch.font small { font-size: 13px; color: #ff453a; }
-.bg-swatch.font.bold b, .bg-swatch.font.bold small { font-weight: 700; }
-.bg-swatch.font.light b, .bg-swatch.font.light small { font-weight: 300; }
+/* 字體粗細滑桿 */
+@font-face { font-family: "Inter"; src: url("fonts/Inter.woff2") format("woff2"); font-weight: 100 900; font-display: block; }
+.font-box { display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.font-sample {
+  --fw: 600;
+  width: 110px; height: 110px; flex: none; border-radius: 22px; background: #1c1c1e; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-weight: var(--fw);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+.font-sample b { font-size: 34px; line-height: 1; font-weight: max(100, calc(var(--fw) - clamp(0, 500 - var(--fw), 100))); }
+.font-sample small { font-size: 13px; color: #ff453a; font-weight: inherit; }
+.font-sample i { font-style: normal; font-size: 11px; opacity: 0.7; font-weight: inherit; }
+.font-slide { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.font-slide .range, .font-slide input { width: 100%; }
+.font-ends { display: flex; justify-content: space-between; font-size: 13px; color: rgba(255, 255, 255, 0.65); }
+.font-ends output { color: #fff; font-weight: 600; }
 
 /* iPhone 捷徑 */
 .row-text small.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; white-space: normal; word-break: break-all; user-select: text; }

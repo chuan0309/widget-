@@ -329,10 +329,13 @@ body.bg-light .pane.pinterest { --pn-bg: #fff; }
 
 /* ───────── 字體：全部粗體（預設，像 iPhone）或全部細體 ─────────
    外觀頁可以選；次要的字一樣粗細，只是改成灰色（用顏色分主次） */
-.pane { font-weight: 600; }
+/* 字體粗細：管理程式用滑桿調（--fw，300 細 ～ 800 粗）
+   標題比內文粗一點（粗的時候 +100，細的時候一樣細）；大數字在細的時候再細一點，像 iPhone */
+.pane { font-weight: var(--fw, 600); }
 .pane :is(small, span, div, p, b, i, strong) { font-weight: inherit; }
-.pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p) { font-weight: 700; }
-.pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 600; }
-body.font-light .pane { font-weight: 400; }
-body.font-light .pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p, .num, .pct) { font-weight: 400; }
-body.font-light .pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 300; }
+.pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p) {
+  font-weight: clamp(var(--fw, 600), calc(var(--fw, 600) * 1.5 - 200), min(calc(var(--fw, 600) + 100), 900));
+}
+.pane :is(.wt-temp, .digital, .aq-num, .cal-day) {
+  font-weight: max(100, calc(var(--fw, 600) - clamp(0, 500 - var(--fw, 600), 100)));
+}

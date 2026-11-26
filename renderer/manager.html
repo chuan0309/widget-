@@ -58,9 +58,12 @@
         <button class="bg-card" data-bg="light"><span class="bg-swatch light"><b>22°</b></span><span>淺色</span></button>
       </div>
       <h2>字體</h2>
-      <div class="bg-grid two">
-        <button class="bg-card" data-font="bold"><span class="bg-swatch font bold"><b>26</b><small>週四</small></span><span>粗體</span></button>
-        <button class="bg-card" data-font="light"><span class="bg-swatch font light"><b>26</b><small>週四</small></span><span>細體</span></button>
+      <div class="font-box">
+        <span class="font-sample" id="fwSample"><b>26</b><small>週四</small><i>台北 18°</i></span>
+        <div class="font-slide">
+          <span class="range"><input type="range" id="fw" min="300" max="800" step="50" /></span>
+          <div class="font-ends"><span style="font-weight:300">細</span><output id="fwOut"></output><span style="font-weight:800">粗</span></div>
+        </div>
       </div>
       <div id="tintBlock">
       <h2>透明程度</h2>
