@@ -12,8 +12,8 @@
 $ErrorActionPreference = 'SilentlyContinue'
 # Background helper: never compete with the widgets' animations for the CPU
 [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)   # no BOM
+[Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 Add-Type -TypeDefinition @'
 using System;

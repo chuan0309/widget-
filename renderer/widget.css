@@ -129,6 +129,35 @@
 .au-now b { font-size: 14px; font-weight: 700; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .au-now small { font-size: 11px; color: var(--ink-soft); }
 
+/* ───────── 手機連結 ───────── */
+.ph { height: 100%; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; }
+.ph-head { display: flex; align-items: center; gap: 8px; }
+.ph-head .ph-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); flex-shrink: 0; }
+.ph-head .ph-ico svg { width: 16px; height: 16px; }
+.ph-head b { font-size: 14px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-state { font-size: 11px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ph-state .ring { --size: 18px; }
+.ph-state .ring::before { -webkit-mask: radial-gradient(closest-side, transparent 62%, #000 64%); }
+.ph-state .ring svg { display: none; }
+.ph-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.ph-dot.off { background: rgba(255, 255, 255, 0.35); }
+.ph-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.ph-n {
+  display: grid; grid-template-columns: 22px 1fr auto; column-gap: 8px; align-items: start;
+  padding: 7px 9px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: pop 0.4s var(--ease-spring) both;
+}
+.ph-logo { width: 22px; height: 22px; border-radius: 6px; grid-row: span 2; object-fit: cover; background: rgba(255, 255, 255, 0.2);
+  display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.ph-app { font-size: 11px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-time { font-size: 10px; color: var(--ink-soft); }
+.ph-text { grid-column: 2 / 4; min-width: 0; font-size: 12px; line-height: 1.3; }
+.ph-text b { font-weight: 700; }
+.ph-text span { color: rgba(255, 255, 255, 0.8); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.size-s .ph-text span { -webkit-line-clamp: 3; }
+.ph-empty { margin: auto; text-align: center; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+
 /* ───────── Google 日曆 ───────── */
 .cal { height: 100%; padding: 14px 16px; display: flex; gap: 14px; }
 .cal-today { display: flex; flex-direction: column; flex-shrink: 0; }
@@ -350,3 +379,11 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 .size-m .au-row { padding: 3px 8px; }
 .size-m .au-ico { width: 28px; height: 28px; }
 .size-m .au-ico svg { width: 16px; height: 16px; }
+
+/* 手機連結（中）：標題和內容同一行，放得下兩則 */
+.size-m .ph { gap: 7px; }
+.size-m .ph-list { gap: 5px; }
+.size-m .ph-n { padding: 5px 9px; }
+.size-m .ph-text { display: flex; gap: 6px; white-space: nowrap; }
+.size-m .ph-text b { flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
+.size-m .ph-text span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

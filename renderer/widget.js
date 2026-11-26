@@ -382,6 +382,64 @@ async function initAudio() {
 }
 if (has("audio")) initAudio();
 
+/* ───────── 手機連結 ───────── */
+let phoneData = { notifications: [], error: "" };
+let phoneDevices = [];
+
+function phoneTime(ms) {
+  if (!ms) return "";
+  const d = new Date(ms), now = new Date();
+  const t = d.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: true });
+  if (sameDay(d, now)) return t;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  return sameDay(d, y) ? `昨天 ${t}` : `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function renderPhone() {
+  // 手機本身：從藍牙裝置裡找手機（連線狀態、電量）
+  const phone = phoneDevices.find((d) => d.connected && deviceType(d.name, d.cod) === "phone")
+    || phoneDevices.find((d) => deviceType(d.name, d.cod) === "phone");
+  const name = phone?.name || "手機連結";
+  const state = phone
+    ? `<span class="ph-dot ${phone.connected ? "" : "off"}"></span>${phone.connected ? "已連線" : "未連線"}` +
+      (phone.connected && phone.battery != null ? `<span class="ring ${phone.battery <= 20 ? "low" : ""}" style="--p:${phone.battery}"></span>${phone.battery}%` : "")
+    : "";
+  const head = `<div class="ph-head"><span class="ph-ico">${icon("phone")}</span><b>${escapeHTML(name)}</b><span class="ph-state">${state}</span></div>`;
+
+  let list;
+  if (phoneData.error) {
+    list = `<div class="ph-empty">${phoneData.error === "notfound" ? "找不到 Windows 的通知紀錄" : "讀不到手機通知"}<br>點一下打開「手機連結」</div>`;
+  } else if (phoneData.notifications.length === 0) {
+    list = `<div class="ph-empty">沒有新的手機通知<br><small>手機連結要開啟「顯示通知橫幅」</small></div>`;
+  } else {
+    const max = size === "l" ? 4 : size === "m" ? 2 : 1;
+    list = phoneData.notifications.slice(0, max).map((n) => {
+      const logo = n.logo ? `<img class="ph-logo" src="${n.logo}" alt="">` : `<span class="ph-logo">${escapeHTML((n.app || "?").slice(0, 1))}</span>`;
+      return `<div class="ph-n">${logo}
+        <span class="ph-app">${escapeHTML(n.app || "通知")}</span><span class="ph-time">${phoneTime(n.time)}</span>
+        <div class="ph-text"><b>${escapeHTML(n.title)}</b><span>${escapeHTML(n.body)}</span></div></div>`;
+    }).join("");
+  }
+  $("ph").innerHTML = (size === "s" ? head.replace('<span class="ph-state">', '<span class="ph-state" style="display:none">') : head) + `<div class="ph-list">${list}</div>`;
+}
+
+async function initPhone() {
+  const st = await window.api.getState();
+  phoneDevices = st.devices || [];
+  phoneData = await window.api.phoneGet();
+  renderPhone();
+  window.api.onPhone((d) => { phoneData = d; if (!paused) renderPhone(); });
+  window.api.onDevices((list) => { phoneDevices = list; if (!paused) renderPhone(); });
+  every(60 * 1000, renderPhone, { now: false }); // 時間文字（「昨天」）跟著更新
+  // 點一下（不是拖動）就打開手機連結
+  let downAt = null;
+  $("ph").addEventListener("pointerdown", (e) => (downAt = [e.screenX, e.screenY]));
+  $("ph").addEventListener("click", (e) => {
+    if (downAt && Math.hypot(e.screenX - downAt[0], e.screenY - downAt[1]) < 4) window.api.phoneOpen();
+  });
+}
+if (has("phone")) initPhone();
+
 /* ───────── Google 日曆 ───────── */
 let calData = null;
 const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();

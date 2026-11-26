@@ -34,8 +34,8 @@ const DEFAULTS = {
   // "ios"：大圓角＋模糊桌布（像 iPhone）；"acrylic"：Windows 11 內建毛玻璃（圓角比較小）
   glass: "ios",
   tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
-  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true },
-  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
+  widgets: { clock: true, weather: true, battery: true, audio: true, phone: true, calendar: true, pinterest: true },
+  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", phone: "m", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   weatherAuto: true, // 天氣自動定位
@@ -74,7 +74,7 @@ function saveSettings() {
 }
 
 /* ───────── 小組件視窗 ───────── */
-const KINDS = ["battery", "clock", "weather", "audio", "calendar", "pinterest"]; // 也是預設排列的順序
+const KINDS = ["battery", "clock", "weather", "audio", "phone", "calendar", "pinterest"]; // 也是預設排列的順序
 const SIZES = {
   s: { width: 170, height: 170, cols: 1, rows: 1 },
   m: { width: 356, height: 170, cols: 2, rows: 1 },
@@ -203,7 +203,7 @@ function setWidgetSize(kind, size) {
   win.loadFile(path.join(__dirname, "renderer", "widget.html"), { query: widgetQuery(kind) });
 }
 
-const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest" };
+const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", phone: "手機連結", calendar: "Google 日曆", pinterest: "Pinterest" };
 
 // 拖動小組件：畫面告訴主程式滑鼠移了多少，主程式移動視窗
 const dragging = new Map(); // webContents id → 開始拖的時候視窗的位置
@@ -394,7 +394,7 @@ function startWatcher() {
     buf += chunk;
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
+      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim(); // PowerShell 有時會在最前面加 BOM
       buf = buf.slice(i + 1);
       if (line.startsWith("[")) handleDevices(JSON.parse(line));
     }
@@ -422,7 +422,7 @@ function startAudio() {
     buf += chunk;
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
+      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim(); // PowerShell 有時會在最前面加 BOM
       buf = buf.slice(i + 1);
       if (line.startsWith("[")) { try { handleAudio(JSON.parse(line)); } catch {} }
     }
@@ -458,6 +458,70 @@ function handleAudio(list) {
   const best = a.priority.map((n) => audioOutputs.find((o) => o.name === n)).find(Boolean);
   if (best && !best.default) setAudioOutput(best.id);
 }
+
+/* ───────── 手機連結：讀 Phone Link 轉過來的手機通知 ───────── */
+// phone.ps1 每 4 秒看一次 Windows 通知中心的資料庫，有變化才回報
+let phoneProc = null;
+let phoneNotifs = [];
+let phoneError = "";
+const logoCache = new Map(); // 圖示路徑 → data URL
+const PHONE_LINK_DIR = path.join(process.env.LOCALAPPDATA || "", "Packages", "Microsoft.YourPhone_8wekyb3d8bbwe").toLowerCase();
+
+function phoneLogo(src) {
+  if (!src) return "";
+  let file = String(src).replace(/^ms-appdata:\/\/\/local\//i, "").replace(/^file:\/\/\/?/i, "");
+  try { file = decodeURIComponent(file); } catch {}
+  file = path.normalize(file);
+  // 只讀 Phone Link 自己資料夾裡的圖，別的路徑一律不碰
+  if (!file.toLowerCase().startsWith(PHONE_LINK_DIR)) return "";
+  if (logoCache.has(file)) return logoCache.get(file);
+  let url = "";
+  try {
+    const img = nativeImage.createFromPath(file);
+    if (!img.isEmpty()) url = img.resize({ width: 48, height: 48, quality: "good" }).toDataURL();
+  } catch {}
+  logoCache.set(file, url);
+  return url;
+}
+
+function startPhone() {
+  if (process.platform !== "win32") return;
+  const script = path.join(__dirname, "phone.ps1").replace("app.asar", "app.asar.unpacked");
+  phoneProc = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], { windowsHide: true });
+  let buf = "";
+  phoneProc.stdout.setEncoding("utf8");
+  phoneProc.stdout.on("data", (chunk) => {
+    buf += chunk;
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).replace(/^\uFEFF/, "").trim();
+      buf = buf.slice(i + 1);
+      let data;
+      try { data = JSON.parse(line); } catch { continue; }
+      if (Array.isArray(data)) {
+        phoneError = "";
+        phoneNotifs = data.map((n) => ({
+          id: n.id, time: n.time, app: n.app || "",
+          title: n.texts?.[0] || "", body: (n.texts || []).slice(1).join("\n"),
+          logo: phoneLogo(n.logo),
+        }));
+      } else {
+        phoneError = data.error || "error";
+        phoneNotifs = [];
+      }
+      sendToKind("phone", "phone", { notifications: phoneNotifs, error: phoneError });
+    }
+  });
+  phoneProc.on("exit", () => {
+    phoneProc = null;
+    if (!app.isQuitting) setTimeout(startPhone, 10000);
+  });
+}
+ipcMain.handle("phone:get", () => ({ notifications: phoneNotifs, error: phoneError }));
+// 點小組件 → 打開 Windows 的「手機連結」
+ipcMain.on("phone:open", () => {
+  if (process.platform === "win32") spawn("explorer.exe", ["shell:AppsFolder\\Microsoft.YourPhone_8wekyb3d8bbwe!App"], { detached: true });
+});
 
 ipcMain.handle("audio:get", () => ({ outputs: audioOutputs, auto: settings.audio.auto, priority: settings.audio.priority }));
 ipcMain.handle("audio:set", (_e, id) => setAudioOutput(String(id)));
@@ -918,6 +982,7 @@ if (!app.requestSingleInstanceLock()) {
     screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
     startWatcher();
     startAudio();
+    startPhone();
     calendar.start();
     setupUpdater();
     startAutoLocate();
@@ -934,6 +999,7 @@ if (!app.requestSingleInstanceLock()) {
     watcher?.kill();
     pinner?.kill();
     audioProc?.kill();
+    phoneProc?.kill();
   });
   app.on("window-all-closed", () => {}); // 關掉所有小組件也不要結束，留在系統匣
 }

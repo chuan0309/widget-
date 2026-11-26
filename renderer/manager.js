@@ -46,6 +46,7 @@ const WIDGET_INFO = [
   { kind: "weather", name: "天氣", icon: "partly_cloudy" },
   { kind: "battery", name: "電量", icon: "buds" },
   { kind: "audio", name: "音訊輸出", icon: "speaker" },
+  { kind: "phone", name: "手機連結", icon: "phone" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
   { kind: "pinterest", name: "Pinterest", icon: "pin" },
 ];

@@ -12,7 +12,7 @@
 $ErrorActionPreference = 'SilentlyContinue'
 # Background helper: never compete with the widgets' animations for the CPU
 [System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)   # no BOM
 
 $KEY_CONNECTED = '{83DA6326-97A6-4088-9453-A1923F573B29} 15'
 $KEY_BATTERY   = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
