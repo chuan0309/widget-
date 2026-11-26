@@ -3,6 +3,54 @@ const kind = params.get("kind") || "clock";
 document.body.className = `glass-${params.get("glass") || "acrylic"}`;
 document.querySelector(`[data-kind="${kind}"]`).hidden = false;
 
+/* ───────── 圓角毛玻璃：模糊的桌布對準小組件的位置 ───────── */
+const card = document.querySelector(`[data-kind="${kind}"]`);
+let wall = null;
+let backdropEl = null;
+
+function layoutBackdrop({ win, area, scale }) {
+  if (!wall || !backdropEl) return;
+  if (wall.mode === "color") {
+    backdropEl.style.cssText = `inset:-40px;background:${wall.color}`;
+    return;
+  }
+  // 照 Windows 的「調整方式」算出桌布在螢幕上畫在哪裡、多大
+  const iw = wall.width / scale, ih = wall.height / scale; // 圖片原始大小（換成螢幕座標）
+  let w = area.width, h = area.height;
+  if (wall.mode === "fill" || wall.mode === "span") {
+    const k = Math.max(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
+  } else if (wall.mode === "fit") {
+    const k = Math.min(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
+  } else if (wall.mode === "center") {
+    w = iw; h = ih;
+  }
+  const x = area.x + (area.width - w) / 2 - win.x;
+  const y = area.y + (area.height - h) / 2 - win.y;
+  const st = backdropEl.style;
+  if (wall.mode === "tile") {
+    st.left = `${area.x - win.x}px`; st.top = `${area.y - win.y}px`;
+    st.width = `${area.width}px`; st.height = `${area.height}px`;
+    st.backgroundRepeat = "repeat"; st.backgroundSize = `${iw}px ${ih}px`;
+  } else {
+    st.left = `${x}px`; st.top = `${y}px`; st.width = `${w}px`; st.height = `${h}px`;
+  }
+}
+
+window.api.onBackdrop?.((data) => {
+  if (data.wall !== undefined) {
+    wall = data.wall;
+    if (wall && !backdropEl) {
+      backdropEl = document.createElement("div");
+      backdropEl.className = "backdrop";
+      card.prepend(backdropEl);
+    }
+    if (backdropEl && wall?.url) backdropEl.style.backgroundImage = `url("${wall.url}")`;
+    card.classList.toggle("has-backdrop", !!wall);
+    if (!wall && backdropEl) { backdropEl.remove(); backdropEl = null; }
+  }
+  layoutBackdrop(data);
+});
+
 const $ = (id) => document.getElementById(id);
 
 /* ───────── 時鐘 ───────── */

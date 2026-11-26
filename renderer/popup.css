@@ -1,3 +1,8 @@
+/* 通知會蓋在別的視窗上面，後面不一定是桌布，所以玻璃做得比較「實」，字才看得清楚 */
+.glass-ios .sheet {
+  --r: 46px;
+  background: rgba(30, 32, 44, 0.88);
+}
 .sheet {
   padding: 24px 22px 20px;
   display: flex; flex-direction: column; align-items: center;

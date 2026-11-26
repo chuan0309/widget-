@@ -3,11 +3,13 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { createPinterestApi } = require("./pinterest-api");
+const wallpaper = require("./wallpaper");
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 const DEFAULTS = {
-  glass: "acrylic", // "acrylic" = Windows 11 毛玻璃；"transparent" = 透明圓角（不模糊）
+  // "ios"：大圓角＋模糊桌布（像 iPhone）；"acrylic"：Windows 11 內建毛玻璃（圓角比較小）
+  glass: "ios",
   widgets: { clock: true, weather: true, battery: true, pinterest: true },
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
@@ -17,6 +19,7 @@ const DEFAULTS = {
 function loadSettings() {
   try {
     const saved = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+    if (saved.glass === "transparent") saved.glass = "ios"; // 舊版設定
     return {
       ...DEFAULTS, ...saved,
       widgets: { ...DEFAULTS.widgets, ...saved.widgets },
@@ -83,6 +86,9 @@ function createWidget(kind) {
     query: { kind, glass: settings.glass },
   });
   win.once("ready-to-show", () => win.showInactive());
+  // 拖動時一直更新背景桌布的位置，玻璃後面的畫面才會對得上
+  win.on("move", () => sendBackdrop(win));
+  win.webContents.on("did-finish-load", () => sendBackdrop(win, true));
   win.on("moved", () => {
     const [x, y] = win.getPosition();
     settings.positions[kind] = { x, y };
@@ -90,6 +96,43 @@ function createWidget(kind) {
   });
   win.on("closed", () => delete widgetWins[kind]);
   widgetWins[kind] = win;
+}
+
+/* ───────── 圓角毛玻璃：把模糊的桌布貼在小組件後面 ───────── */
+let wallInfo = null;
+let wallPrint = "";
+
+function backdropFor(win) {
+  const b = win.getBounds();
+  const display = screen.getDisplayMatching(b);
+  // 「跨螢幕延伸」的桌布是以全部螢幕合起來計算
+  let area = display.bounds;
+  if (wallInfo?.mode === "span") {
+    const all = screen.getAllDisplays().map((d) => d.bounds);
+    const x = Math.min(...all.map((r) => r.x)), y = Math.min(...all.map((r) => r.y));
+    area = {
+      x, y,
+      width: Math.max(...all.map((r) => r.x + r.width)) - x,
+      height: Math.max(...all.map((r) => r.y + r.height)) - y,
+    };
+  }
+  return { win: b, area, scale: display.scaleFactor };
+}
+
+function sendBackdrop(win, withImage = false) {
+  if (settings.glass !== "ios" || win.isDestroyed()) return;
+  const payload = backdropFor(win);
+  if (withImage) payload.wall = wallInfo;
+  win.webContents.send("backdrop", payload);
+}
+
+async function refreshWallpaper(force = false) {
+  if (process.platform !== "win32") return;
+  const fp = await wallpaper.fingerprint().catch(() => "");
+  if (!force && fp === wallPrint) return;
+  wallPrint = fp;
+  wallInfo = await wallpaper.readWallpaper().catch(() => null);
+  for (const w of Object.values(widgetWins)) sendBackdrop(w, true);
 }
 
 function rebuildWidgets() {
@@ -260,8 +303,8 @@ function buildTrayMenu() {
     { label: "電量", type: "checkbox", checked: settings.widgets.battery, click: toggleWidget("battery") },
     { label: "Pinterest", type: "checkbox", checked: settings.widgets.pinterest, click: toggleWidget("pinterest") },
     { type: "separator" },
-    { label: "玻璃效果：毛玻璃（Win11）", type: "radio", checked: settings.glass === "acrylic", click: setGlass("acrylic") },
-    { label: "玻璃效果：透明圓角", type: "radio", checked: settings.glass === "transparent", click: setGlass("transparent") },
+    { label: "玻璃效果：圓角毛玻璃（像 iPhone）", type: "radio", checked: settings.glass === "ios", click: setGlass("ios") },
+    { label: "玻璃效果：Windows 毛玻璃（小圓角）", type: "radio", checked: settings.glass === "acrylic", click: setGlass("acrylic") },
     { type: "separator" },
     {
       label: "開機自動啟動", type: "checkbox",
@@ -392,7 +435,9 @@ if (!app.requestSingleInstanceLock()) {
     tray.setToolTip("Glass Widgets");
     tray.on("click", showAllWidgets);
     buildTrayMenu();
-    rebuildWidgets();
+    refreshWallpaper(true).finally(rebuildWidgets);
+    setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換
+    screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
     startWatcher();
   });
   app.on("before-quit", () => {
