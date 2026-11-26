@@ -100,29 +100,29 @@
     <!-- Google 日曆 -->
     <section data-section="calendar">
       <h1>Google 日曆</h1>
-      <p class="lead">把 Google 日曆的行程顯示在桌面上。不用登入，貼上行事曆的「私人網址」就好。</p>
+      <p class="lead">登入 Google 帳號，把行程顯示在桌面上。</p>
 
-      <h2>已加入的行事曆</h2>
-      <div class="group" id="calList"></div>
+      <div class="group" id="gAccount"></div>
 
-      <h2>加入行事曆</h2>
-      <div class="group">
-        <div class="row">
-          <input class="grow" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" spellcheck="false" />
-          <button class="btn small" id="calAdd">加入</button>
+      <div id="gCalsWrap" hidden>
+        <h2>要顯示的日曆</h2>
+        <div class="group" id="gCals"></div>
+      </div>
+
+      <details class="adv" id="calAdv">
+        <summary>進階：用 iCal 網址加入（不用登入）</summary>
+        <h2>已加入的 iCal 行事曆</h2>
+        <div class="group" id="calList"></div>
+        <div class="group" style="margin-top:12px">
+          <div class="row">
+            <input class="grow" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" spellcheck="false" />
+            <button class="btn small" id="calAdd">加入</button>
+          </div>
         </div>
-      </div>
-      <p class="hint err" id="calErr"></p>
-
-      <h2>網址去哪裡找？（在電腦上做）</h2>
-      <div class="group steps">
-        <div class="row"><span class="num">1</span><span class="row-text"><b>打開 Google 日曆網頁版</b><small>calendar.google.com</small></span>
-          <button class="btn small ghost" id="calOpenGoogle"><span data-icon="open_in_new"></span>打開</button></div>
-        <div class="row"><span class="num">2</span><span class="row-text"><b>左邊「我的日曆」→ 滑到你的日曆上 → 按「⋮」→「設定和共用」</b></span></div>
-        <div class="row"><span class="num">3</span><span class="row-text"><b>往下滑到「整合日曆」</b><small>不是「公開網址」，是下面那個</small></span></div>
-        <div class="row"><span class="num">4</span><span class="row-text"><b>複製「iCal 格式的私人網址」，貼到上面</b><small>有好幾個日曆就一個一個加</small></span></div>
-      </div>
-      <p class="hint">這個網址等於你行事曆的鑰匙，不要給別人；程式會用 Windows 的加密存起來。行程每 15 分鐘更新一次。</p>
+        <p class="hint err" id="calErr"></p>
+        <p class="hint">網址在 Google 日曆網頁版 → 日曆的「設定和共用」→「整合日曆」→「iCal 格式的私人網址」。
+          <button class="link" id="calOpenGoogle">打開 Google 日曆設定</button></p>
+      </details>
     </section>
 
     <!-- Pinterest -->
@@ -132,13 +132,20 @@
 
       <div class="group" id="pnStatus"></div>
 
+      <div class="group" id="pnQuick" hidden>
+        <div class="row">
+          <span class="row-text"><b>用你的 Pinterest 帳號登入</b><small id="pnQuickErr">會打開瀏覽器，按「允許」就完成</small></span>
+          <button class="btn signin pinterest" id="pnQuickLogin"><span data-icon="pin"></span>使用 Pinterest 帳號登入</button>
+        </div>
+      </div>
+
       <div id="pnBoardsWrap" hidden>
         <h2>選擇圖版</h2>
         <div class="group board-list" id="pnBoards"></div>
       </div>
 
       <div id="pnLoginWrap">
-        <h2>登入帳號（官方 API）</h2>
+        <h2 id="pnManualTitle">登入帳號（官方 API）</h2>
         <div class="group">
           <div class="row stack">
             <span class="row-text"><b>App ID 和 App secret</b><small>在 developers.pinterest.com →「我的應用程式」裡</small></span>
@@ -159,14 +166,16 @@
         </div>
       </div>
 
-      <h2>或用公開網址（不用登入）</h2>
-      <div class="group">
-        <div class="row">
-          <input class="grow" id="pnUrl" placeholder="pinterest.com/你的帳號/圖版名稱" spellcheck="false" />
-          <button class="btn small" id="pnUrlSave">套用</button>
+      <details class="adv">
+        <summary>進階：用公開網址（不用登入）</summary>
+        <div class="group" style="margin-top:12px">
+          <div class="row">
+            <input class="grow" id="pnUrl" placeholder="pinterest.com/你的帳號/圖版名稱" spellcheck="false" />
+            <button class="btn small" id="pnUrlSave">套用</button>
+          </div>
         </div>
-      </div>
-      <p class="hint err" id="pnUrlErr"></p>
+        <p class="hint err" id="pnUrlErr"></p>
+      </details>
     </section>
 
     <!-- 天氣 -->

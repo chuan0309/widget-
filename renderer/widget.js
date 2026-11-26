@@ -505,7 +505,16 @@ async function initPinterest() {
   }, 30 * 60 * 1000);
 
   document.querySelectorAll("[data-go]").forEach((b) =>
-    b.addEventListener("click", () => showView(b.dataset.go)));
+    b.addEventListener("click", async () => {
+      // 打包時就有 Pinterest App 資料 → 不用填表，直接到瀏覽器登入
+      if (b.dataset.go === "login" && status.builtIn && b.closest('[data-view="choice"]')) {
+        showView("wait");
+        const res = await window.api.pinterestLogin("", "");
+        if (res.ok) openBoards(); else showView("choice", res.error);
+        return;
+      }
+      showView(b.dataset.go);
+    }));
 
   // 公開網址
   $("pnRssForm").addEventListener("submit", async (e) => {

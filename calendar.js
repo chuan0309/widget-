@@ -87,7 +87,7 @@ function expand(text, from, to) {
   return { name, events: out };
 }
 
-function createCalendar({ settings, save, onUpdate }) {
+function createCalendar({ settings, save, onUpdate, google }) {
   const C = () => settings.calendar;
   let cache = { events: [], sources: [], at: 0 };
   let timer = null;
@@ -99,9 +99,11 @@ function createCalendar({ settings, save, onUpdate }) {
     return [from, to];
   }
 
+  const hasAny = () => (C().sources || []).length > 0 || !!google?.isLoggedIn();
+
   async function refresh() {
     const sources = C().sources || [];
-    if (sources.length === 0) {
+    if (!hasAny()) {
       cache = { events: [], sources: [], at: Date.now() };
       onUpdate?.(snapshot());
       return snapshot();
@@ -117,9 +119,15 @@ function createCalendar({ settings, save, onUpdate }) {
         return { info: { name: s.name || `行事曆 ${i + 1}`, color, error: e.message || "讀取失敗" }, events: [] };
       }
     }));
+    // 登入的 Google 帳號
+    let g = { events: [], sources: [] };
+    if (google?.isLoggedIn()) {
+      try { g = await google.fetchEvents(from, to); }
+      catch (e) { g = { events: [], sources: [{ name: "Google 日曆", color: "#0a84ff", error: e.message, loginExpired: !!e.loginExpired }] }; }
+    }
     cache = {
-      events: results.flatMap((r) => r.events).sort((a, b) => a.start - b.start),
-      sources: results.map((r) => r.info),
+      events: [...g.events, ...results.flatMap((r) => r.events)].sort((a, b) => a.start - b.start),
+      sources: [...g.sources, ...results.map((r) => r.info)],
       at: Date.now(),
     };
     onUpdate?.(snapshot());
@@ -127,7 +135,7 @@ function createCalendar({ settings, save, onUpdate }) {
   }
 
   function snapshot() {
-    return { needSetup: (C().sources || []).length === 0, events: cache.events, sources: cache.sources, at: cache.at };
+    return { needSetup: !hasAny(), events: cache.events, sources: cache.sources, at: cache.at };
   }
 
   async function get() {

@@ -34,6 +34,25 @@ jobs:
           npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
           echo "value=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
+      # 「使用 Google／Pinterest 帳號登入」用的程式 ID，從 GitHub 的加密設定（Secrets）拿，
+      # 只會放進打包好的程式裡，不會出現在原始碼。沒設定的話就是空的，程式會改用手動方式。
+      - name: Write sign-in config
+        shell: bash
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+        run: |
+          node -e "
+            const e = process.env;
+            require('fs').writeFileSync('oauth.json', JSON.stringify({
+              google: { clientId: e.GOOGLE_CLIENT_ID || '', clientSecret: e.GOOGLE_CLIENT_SECRET || '' },
+              pinterest: { appId: e.PINTEREST_APP_ID || '', appSecret: e.PINTEREST_APP_SECRET || '' },
+            }));
+            console.log('Google sign-in:', e.GOOGLE_CLIENT_ID ? 'yes' : 'no', '/ Pinterest sign-in:', e.PINTEREST_APP_ID ? 'yes' : 'no');
+          "
+
       # 先全部打包好（不在這一步上傳，避免兩個檔案同時建立 Release 撞在一起）
       - name: Build installer and portable exe
         run: npx electron-builder --win nsis portable --x64 --publish never

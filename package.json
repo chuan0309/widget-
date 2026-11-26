@@ -23,6 +23,8 @@
       "wallpaper.js",
       "calendar.js",
       "desktop-pin.ps1",
+      "google.js",
+      "oauth.json",
       "bt-watch.ps1",
       "renderer/**",
       "assets/**"

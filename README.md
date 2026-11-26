@@ -70,6 +70,35 @@ npm run dist
   - 讀不到電量的裝置會顯示灰色圓圈＋「已連線」（例如 PS5 手把的電量藏在自家格式裡，Windows 讀不到）
   - **用 USB 接收器（2.4G）連的裝置不是藍牙**，例如 Sony INZONE 耳機插接收器時、羅技 Unifying/Bolt 接收器，這些目前偵測不到
 
+### 讓「使用 Google／Pinterest 帳號登入」按鈕能用（開發者做一次就好）
+
+Google 和 Pinterest 規定：每個用「帳號登入」的程式都要先跟他們登記，拿到程式 ID。
+登記好之後放進 GitHub 的加密設定，GitHub 打包時會自動放進程式裡；之後使用者只要按「登入」。
+（還沒設定的話，程式會改用「進階」裡的手動方式：iCal 網址、Pinterest App ID。）
+
+**Google（Google 日曆用）**
+
+1. 到 [Google Cloud Console](https://console.cloud.google.com/) 建一個專案（名稱隨便，例如 Glass Widgets）
+2. 「API 和服務」→「程式庫」→ 搜尋 **Google Calendar API** → 啟用
+3. 「Google 驗證平台」（舊版叫「OAuth 同意畫面」）：
+   - 品牌：填應用程式名稱、你的 email
+   - 目標對象：選「外部」，把自己的 Gmail 加進「測試使用者」
+   - 資料存取：新增範圍 `.../auth/calendar.readonly`
+   - 最後在「目標對象」按 **發布應用程式**（改成「實際運作中」）。不發布的話，Google 每 7 天會要你重新登入一次
+4. 「用戶端」→ 建立用戶端 → 應用程式類型選 **電腦版應用程式** → 複製 **用戶端 ID** 和 **用戶端密碼**
+5. 到這個 GitHub 專案 → Settings → Secrets and variables → Actions → New repository secret，新增：
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+
+第一次登入時 Google 會顯示「Google 尚未驗證這個應用程式」，因為這是自己用的程式、沒送 Google 審核。按「進階」→「前往 Glass Widgets（不安全）」就可以繼續。
+
+**Pinterest**
+
+Pinterest 的 App 審核通過後，一樣在 GitHub Secrets 新增 `PINTEREST_APP_ID` 和 `PINTEREST_APP_SECRET`（App 設定的 Redirect URI 要有 `http://localhost:8085/`）。
+
+> 注意：這些 ID 和密碼會被打包進程式裡（桌面程式都是這樣，Google 也把電腦版的密碼視為「不算祕密」）。
+> 懂程式的人有辦法從安裝檔裡挖出來，但他們拿去也只能用「你的」程式名義請別人登入，看不到你的資料。
+
 ### Pinterest 怎麼設定
 
 **方法 A：登入帳號（官方 API，可以看私密圖版）**

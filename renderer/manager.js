@@ -34,7 +34,7 @@ function go(section) {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.go === section));
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.dataset.section === section));
   if (section === "pinterest") loadPinterest();
-  if (section === "calendar") renderCalendars();
+  if (section === "calendar") { renderCalendars(); loadGoogle(); }
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 window.api.onGoto((section) => go(section));
@@ -169,7 +169,9 @@ async function loadPinterest() {
     loadPinterest();
   });
 
-  $("pnLoginWrap").hidden = st.loggedIn;
+  // 打包時就有 Pinterest App 資料 → 只顯示「使用 Pinterest 帳號登入」按鈕
+  $("pnQuick").hidden = st.loggedIn || !st.builtIn;
+  $("pnLoginWrap").hidden = st.loggedIn || st.builtIn;
   $("pnBoardsWrap").hidden = !st.loggedIn;
   if (st.loggedIn) loadBoards(st.source?.id);
 }
@@ -202,6 +204,15 @@ async function loadBoards(currentId) {
   }));
 }
 
+$("pnQuickLogin").addEventListener("click", async () => {
+  $("pnQuickLogin").disabled = true;
+  $("pnQuickErr").classList.remove("err");
+  $("pnQuickErr").textContent = "請在瀏覽器按「允許」，完成後會自動回到這裡…";
+  const res = await window.api.pinterestLogin("", "");
+  $("pnQuickLogin").disabled = false;
+  if (res.ok) { window.api.mgrPinsChanged(); toast("登入成功！選一個圖版吧"); loadPinterest(); }
+  else { $("pnQuickErr").textContent = res.error; $("pnQuickErr").classList.add("err"); }
+});
 $("pnCopy").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("pnRedirect").textContent); toast("已複製"); }
   catch { toast("複製失敗，請手動選取"); }
@@ -228,12 +239,71 @@ $("pnUrlSave").addEventListener("click", async () => {
   loadPinterest();
 });
 
-/* ───────── Google 日曆 ───────── */
+/* ───────── Google 日曆：登入帳號 ───────── */
+async function loadGoogle() {
+  const st = await window.api.googleStatus();
+  const box = $("gAccount");
+  $("gCalsWrap").hidden = true;
+
+  if (!st.configured) {
+    box.innerHTML = `<div class="row"><span class="row-icon">${icon("calendar")}</span>
+      <span class="row-text"><b>這個版本還不能用 Google 帳號登入</b>
+      <small>開發者還沒設定 Google 登入（README 裡有步驟）。現在可以先用下面「進階」的 iCal 網址。</small></span></div>`;
+    $("calAdv").open = true;
+    return;
+  }
+  if (!st.loggedIn) {
+    box.innerHTML = `<div class="row signin-big">
+      <span class="row-text"><b>登入後會自動列出你所有的日曆</b>
+        <small id="gMsg">會打開瀏覽器，選你的 Google 帳號、按「允許」就完成。只會讀取行程，不會修改。</small></span>
+      <button class="btn signin google" id="gLogin"><span class="g">G</span>使用 Google 帳號登入</button></div>`;
+    $("gLogin").addEventListener("click", async () => {
+      $("gLogin").disabled = true;
+      $("gMsg").textContent = "請在瀏覽器登入並按「允許」，完成後會自動回到這裡…";
+      const r = await window.api.googleLogin();
+      if (r.ok) { toast("登入成功"); loadGoogle(); }
+      else { $("gLogin").disabled = false; $("gMsg").textContent = r.error; $("gMsg").classList.add("err"); }
+    });
+    return;
+  }
+
+  box.innerHTML = `<div class="row">
+      <span class="row-icon blue">${icon("check_circle")}</span>
+      <span class="row-text"><b>已登入 Google</b><small>${escapeHTML(st.email)}</small></span>
+      <button class="btn small ghost" id="gLogout">${icon("logout")}登出</button></div>`;
+  $("gLogout").addEventListener("click", async () => {
+    await window.api.googleLogout();
+    toast("已登出 Google");
+    loadGoogle();
+  });
+
+  $("gCalsWrap").hidden = false;
+  $("gCals").innerHTML = `<div class="row"><span class="row-text"><small>讀取中…</small></span></div>`;
+  const res = await window.api.googleCalendars();
+  if (res.error) {
+    $("gCals").innerHTML = `<div class="row"><span class="row-text"><b class="err">${escapeHTML(res.error)}</b></span></div>`;
+    return;
+  }
+  $("gCals").replaceChildren(...res.calendars.map((c) => {
+    const row = document.createElement("label");
+    row.className = "row";
+    row.innerHTML = `<span class="dot" style="background:${c.color}"></span>
+      <span class="row-text"><b>${escapeHTML(c.name)}</b>${c.primary ? "<small>主要日曆</small>" : ""}</span>
+      <input type="checkbox" class="switch" ${c.on ? "checked" : ""} />`;
+    row.querySelector("input").addEventListener("change", async (e) => {
+      await window.api.googleChoose(c.id, e.target.checked);
+      toast(e.target.checked ? `會顯示「${c.name}」` : `不顯示「${c.name}」`);
+    });
+    return row;
+  }));
+}
+
+/* ───────── Google 日曆：進階（iCal 網址） ───────── */
 function renderCalendars() {
   const list = state.calendars || [];
   if (list.length === 0) {
     $("calList").innerHTML = `<div class="row"><span class="row-icon">${icon("calendar")}</span>
-      <span class="row-text"><b>還沒有加入行事曆</b><small>照下面的步驟拿到網址，貼上就好</small></span></div>`;
+      <span class="row-text"><b>沒有用 iCal 網址加入的行事曆</b><small>登入 Google 帳號的話不需要這個</small></span></div>`;
     return;
   }
   $("calList").replaceChildren(...list.map((c, i) => {

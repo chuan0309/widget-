@@ -7,6 +7,26 @@ const { createPinterestApi } = require("./pinterest-api");
 const wallpaper = require("./wallpaper");
 const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
+const { createGoogle } = require("./google");
+
+// 「使用 Google／Pinterest 帳號登入」需要的程式 ID，打包時由 GitHub 放進 oauth.json（不在原始碼裡）。
+// 自己開發時也可以用環境變數 GW_GOOGLE_CLIENT_ID 等等。
+function loadOAuthConfig() {
+  let f = {};
+  try { f = JSON.parse(fs.readFileSync(path.join(__dirname, "oauth.json"), "utf8")); } catch {}
+  const e = process.env;
+  return {
+    google: {
+      clientId: f.google?.clientId || e.GW_GOOGLE_CLIENT_ID || "",
+      clientSecret: f.google?.clientSecret || e.GW_GOOGLE_CLIENT_SECRET || "",
+    },
+    pinterest: {
+      appId: f.pinterest?.appId || e.GW_PINTEREST_APP_ID || "",
+      appSecret: f.pinterest?.appSecret || e.GW_PINTEREST_APP_SECRET || "",
+    },
+  };
+}
+const OAUTH = loadOAuthConfig();
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
@@ -594,8 +614,10 @@ ipcMain.handle("pins:status", () => ({
   clientId: settings.pinterest.clientId || "",
   source: settings.pinterest.source || null,
   redirectUri: pinApi.REDIRECT_URI,
+  builtIn: !!(OAUTH.pinterest.appId && OAUTH.pinterest.appSecret), // 打包時就有 App 資料 → 只要按登入
 }));
-ipcMain.handle("pins:login", (_e, { clientId, clientSecret }) => pinApi.login(clientId, clientSecret));
+ipcMain.handle("pins:login", (_e, { clientId, clientSecret } = {}) =>
+  pinApi.login(clientId || OAUTH.pinterest.appId, clientSecret || OAUTH.pinterest.appSecret));
 ipcMain.handle("pins:boards", async () => {
   try { return { boards: await pinApi.listBoards() }; }
   catch (e) { return { error: e.message, loginExpired: !!e.loginExpired, accessDenied: !!e.accessDenied }; }
@@ -628,8 +650,9 @@ ipcMain.on("open-pin", (_e, link) => {
 ipcMain.handle("get-state", () => ({ devices, city: settings.city }));
 
 /* ───────── Google 日曆 ───────── */
+const google = createGoogle({ settings, save: saveSettings, config: OAUTH.google });
 const calendar = createCalendar({
-  settings, save: saveSettings,
+  settings, save: saveSettings, google,
   onUpdate: (data) => {
     widgetWins.calendar?.webContents.send("cal:update", data);
     managerWin?.webContents.send("mgr:refresh");
@@ -639,6 +662,18 @@ ipcMain.handle("cal:get", () => calendar.get());
 ipcMain.handle("cal:add", (_e, url) => calendar.add(url));
 ipcMain.handle("cal:remove", (_e, i) => calendar.remove(Number(i)));
 ipcMain.handle("cal:refresh", () => calendar.refresh());
+ipcMain.handle("google:status", () => ({ configured: google.configured(), loggedIn: google.isLoggedIn(), email: google.email() }));
+ipcMain.handle("google:login", async () => {
+  const r = await google.login();
+  if (r.ok) calendar.refresh().catch(() => {});
+  return r;
+});
+ipcMain.handle("google:logout", async () => { await google.logout(); return calendar.refresh(); });
+ipcMain.handle("google:calendars", async () => {
+  try { return { calendars: await google.listCalendars() }; }
+  catch (e) { return { error: e.message, loginExpired: !!e.loginExpired }; }
+});
+ipcMain.handle("google:choose", (_e, id, on) => { google.chooseCalendar(String(id), !!on); return calendar.refresh(); });
 ipcMain.on("popup:close", hidePopup); // 瀏海收回去的動畫跑完了
 
 /* ───────── 啟動 ───────── */
