@@ -227,9 +227,6 @@ function Read-GattBattery([string]$mac) {
 
 $gattCache = @{}   # mac -> @{ at = [datetime]; level = int or $null }
 
-
-$gattCache = @{}
-
 function Get-BtJson {
   $devices = @{}
   $nodes = @(Get-PnpDevice -Class Bluetooth, BTHLEDevice | Where-Object { Get-Mac $_.InstanceId })
@@ -297,7 +294,23 @@ function Get-BtJson {
     }
   }
 
-  $list = @($devices.Values | Where-Object { $_.name } | Sort-Object { $_.id })
+  # One headset can show up as several devices, one per channel
+  # ("INZONE Buds - Game" + "INZONE Buds - Chat", over Bluetooth LE Audio or USB):
+  # show it once. Only names with such a suffix are merged, so two identical
+  # mice still show up as two.
+  $byName = [ordered]@{}
+  $list = @()
+  foreach ($d in @($devices.Values | Where-Object { $_.name } | Sort-Object { $_.id })) {
+    $base = ($d.name -replace '\s*[-\u2013\u2014]\s*(Chat|Game|Voice)$', '').Trim()
+    $isChannel = $base -ne $d.name -or $d.id -like 'USB-*'
+    if (-not $isChannel) { $list += $d; continue }
+    $d.name = $base
+    $k = $byName[$base.ToLower()]
+    if (-not $k) { $byName[$base.ToLower()] = $d; $list += $d; continue }
+    if ($d.connected) { $k.connected = $true }
+    if ($d.battery -ne $null -and ($k.battery -eq $null -or $d.battery -gt $k.battery)) { $k.battery = $d.battery }
+    if (-not $k.cod) { $k.cod = $d.cod }
+  }
   $json = ConvertTo-Json -InputObject $list -Compress -Depth 3
   if (-not $json) { $json = '[]' }
   return $json
