@@ -11,7 +11,7 @@ function render(device) {
   if (!device) return;
   $("name").textContent = device.name;
   const low = device.alert === "low";
-  $("sub").textContent = low ? "電量偏低，記得充電" : "已連線";
+  $("sub").textContent = low ? "電量偏低，記得充電" : device.battery == null ? "已連線・讀不到電量" : "已連線";
   $("sub").classList.toggle("low", low);
 
   const type = deviceType(device.name, device.cod);
@@ -26,5 +26,4 @@ function render(device) {
 }
 
 window.api.onPopupDevice(render);
-$("doneBtn").addEventListener("click", () => window.api.closePopup());
 $("closeBtn").addEventListener("click", () => window.api.closePopup());
