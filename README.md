@@ -7,7 +7,17 @@ Windows 11 桌面小組件 App，iOS 液態玻璃風格：
 
 用 [Electron](https://www.electronjs.org/) 做的，跟 Discord、VS Code 桌面版是同一種技術，打包後就是一般的 Windows 程式（.exe）。
 
-## 怎麼跑
+## 下載安裝（一般使用者）
+
+1. 在電腦上打開這個 GitHub 專案 →「Actions」分頁 → 點最上面那次執行（綠色勾勾）
+2. 拉到最下面「Artifacts」，下載 **Glass-Widgets-Windows**（是一個 zip）
+3. 解壓縮，裡面有兩個檔案，選一個：
+   - `Glass Widgets Setup 1.0.0.exe`：**安裝版**，會出現在開始選單
+   - `Glass Widgets 1.0.0.exe`：**免安裝版**，直接點兩下就能用
+4. 第一次打開 Windows 可能會跳出藍色的「Windows 已保護您的電腦」→ 按「其他資訊」→「仍要執行」
+   （因為這個程式沒有買數位簽章，不是病毒）
+
+## 自己從原始碼執行（開發用）
 
 1. 先裝 [Node.js](https://nodejs.org/)（選 LTS 版，一路按下一步）
 2. 在這個專案資料夾開終端機（資料夾空白處 Shift + 右鍵 →「在終端機中開啟」），輸入：

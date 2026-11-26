@@ -16,15 +16,29 @@
   "build": {
     "appId": "local.glasswidgets.app",
     "productName": "Glass Widgets",
-    "files": ["main.js", "preload.js", "pinterest-api.js", "wallpaper.js", "bt-watch.ps1", "renderer/**", "assets/**"],
-    "asarUnpack": ["bt-watch.ps1"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "pinterest-api.js",
+      "wallpaper.js",
+      "bt-watch.ps1",
+      "renderer/**",
+      "assets/**"
+    ],
+    "asarUnpack": [
+      "bt-watch.ps1"
+    ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
-  }
+  },
+  "author": "Chuan"
 }
