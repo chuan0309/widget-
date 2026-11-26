@@ -347,3 +347,15 @@ select.select {
   padding: 6px 10px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); cursor: pointer;
 }
 select.select option { background: #2c2c2e; }
+
+.bg-grid.two { grid-template-columns: repeat(2, 1fr); max-width: 66%; }
+.bg-swatch.font { background: #1c1c1e; color: #fff; display: flex; flex-direction: column; gap: 2px; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.bg-swatch.font small { font-size: 13px; color: #ff453a; }
+.bg-swatch.font.bold b, .bg-swatch.font.bold small { font-weight: 700; }
+.bg-swatch.font.light b, .bg-swatch.font.light small { font-weight: 300; }
+
+/* iPhone 捷徑 */
+.row-text small.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; white-space: normal; word-break: break-all; user-select: text; }
+.ph-steps { margin: 8px 0 0; padding-left: 22px; line-height: 1.7; }
+.ph-steps li { margin: 2px 0; }
+#phBox .row-text small { white-space: normal; }

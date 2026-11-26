@@ -2,36 +2,60 @@
 
 /* ───────── 時鐘 ───────── */
 .clock { display: flex; align-items: center; justify-content: center; gap: 8px; }
-/* 像 Apple 的「時鐘 I」：白色圓形錶面、黑色數字和指針、橘色秒針 */
+/* 像 iPhone 的「時鐘」小組件：白色錶面幾乎填滿、60 格細刻度＋粗的整點刻度、
+   粗體數字在刻度內側、Apple 造型的指針（靠中心一小段是細的）、橘色秒針 */
 .analog {
-  --d: 140px;
+  --d: 150px;
   position: relative; flex-shrink: 0;
   width: var(--d); height: var(--d);
   border-radius: 50%;
   background: #fff; color: #000;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
-.analog::before { /* 60 格刻度，整點的比較粗 */
-  content: ""; position: absolute; inset: 3.5%; border-radius: 50%;
-  background:
-    repeating-conic-gradient(from -0.7deg, rgba(0, 0, 0, 0.8) 0 1.4deg, transparent 1.4deg 30deg),
-    repeating-conic-gradient(from -0.3deg, rgba(0, 0, 0, 0.35) 0 0.6deg, transparent 0.6deg 6deg);
-  -webkit-mask: radial-gradient(circle, transparent 90%, #000 91%);
+.analog::before { /* 60 格小刻度（灰、短） */
+  content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+  background: repeating-conic-gradient(from -0.35deg, rgba(0, 0, 0, 0.32) 0 0.7deg, transparent 0.7deg 6deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 91.5%, #000 92%);
+}
+.analog::after { /* 整點刻度（黑、比較長、比較粗） */
+  content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+  background: repeating-conic-gradient(from -0.55deg, #000 0 1.1deg, transparent 1.1deg 30deg);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 91%, #000 91.5%);
 }
 .num {
   position: absolute; left: 50%; top: 50%;
-  font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  font-size: calc(var(--d) * 0.115); font-weight: 600; line-height: 1; color: #000;
-  translate: -50% -50%;
+  font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-size: calc(var(--d) * 0.118); font-weight: 560; line-height: 1; color: #000; letter-spacing: -0.02em;
+  translate: -50% -50%; z-index: 1;
 }
-.hand { position: absolute; left: 50%; bottom: 50%; transform-origin: 50% 100%; border-radius: 4px; background: #1c1c1e; }
-.hand.h { width: calc(var(--d) * 0.045); height: 25%; translate: -50% 0; }
-.hand.m { width: calc(var(--d) * 0.035); height: 37%; translate: -50% 0; }
-.hand.s { width: 1.5px; height: 42%; translate: -50% 0; background: #ff9500; }
-.hand.s::after { content: ""; position: absolute; left: 50%; bottom: -16%; width: 100%; height: 16%; translate: -50% 0; background: inherit; }
-.pin { position: absolute; width: 5%; height: 5%; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #ff9500; }
+/* 時針、分針：靠中心一小段細細的，後面才變粗（Apple 的樣子） */
+.hand { position: absolute; left: 50%; bottom: 50%; transform-origin: 50% 100%; z-index: 2; }
+.hand.h::before, .hand.m::before { /* 粗的部分 */
+  content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 20%; border-radius: 99px; background: #1c1c1e;
+}
+.hand.h::after, .hand.m::after { /* 靠中心的細段 */
+  content: ""; position: absolute; left: 36%; right: 36%; bottom: 0; height: 24%; background: #1c1c1e;
+}
+.hand.h { width: calc(var(--d) * 0.04); height: 27%; translate: -50% 0; }
+.hand.m { width: calc(var(--d) * 0.04); height: 42%; translate: -50% 0; }
+.hand.s { width: 1.4px; height: 43%; translate: -50% 0; background: #ff9500; z-index: 3; }
+.hand.s::after { content: ""; position: absolute; left: 50%; bottom: -18%; width: 100%; height: 18%; translate: -50% 0; background: inherit; }
+/* 中心：黑色圓心，外面細細一圈橘色，裡面白點（Apple 的樣子） */
+.pin { position: absolute; z-index: 4; width: 3.2%; height: 3.2%; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.4px #ff9500, 0 0 0 3.2px #1c1c1e; }
+/* 世界時鐘（大）：2×2，城市名＋時差；晚上的城市錶面變深色 */
+.world { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; padding: 14px 12px 10px; }
+.wc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 0; }
+.size-l .wc .analog { --d: 118px; }
+.wc b { font-size: 14px; font-weight: 700; margin-top: 6px; line-height: 1.1; }
+.wc small { font-size: 11px; color: var(--ink-soft); }
+.wc.night .analog { background: #1c1c1e; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.wc.night .num { color: #fff; }
+.wc.night .analog::before { background: repeating-conic-gradient(from -0.35deg, rgba(255, 255, 255, 0.35) 0 0.7deg, transparent 0.7deg 6deg); }
+.wc.night .analog::after { background: repeating-conic-gradient(from -0.55deg, #fff 0 1.1deg, transparent 1.1deg 30deg); }
+.wc.night .hand.h::before, .wc.night .hand.h::after, .wc.night .hand.m::before, .wc.night .hand.m::after { background: #fff; }
+.wc.night .pin { background: #1c1c1e; box-shadow: 0 0 0 1.4px #ff9500, 0 0 0 3.2px #fff; }
 .clock-info { display: flex; flex-direction: column; }
-.digital { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.digital { font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .clock-meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--ink-soft); }
 .clock-meta b { font-size: 17px; color: var(--ink); }
 .clock-date { font-size: 15px; font-weight: 600; margin-top: 8px; }
@@ -41,7 +65,7 @@
 .size-s .clock-meta { display: none; }
 .size-s .digital, .size-s .clock-date, .size-s .lunar { display: none; }
 .size-m .clock { gap: 22px; }
-.size-m .analog { --d: 142px; }
+.size-m .analog { --d: 146px; }
 .size-m .clock-meta, .size-l .clock-meta { display: none; }
 .size-l .clock { flex-direction: column; gap: 14px; }
 .size-l .analog { --d: 240px; }
@@ -53,15 +77,20 @@
 .wt { height: 100%; padding: 16px; display: flex; flex-direction: column; }
 /* 像 Apple 的天氣：用天空的顏色當背景（白天、晚上、陰天、下雨不一樣） */
 .pane.weather { --sky: linear-gradient(180deg, #2f6fd6, #5aa2ec); background: var(--sky); --fg: 255 255 255; --ink: #fff; --ink-soft: rgba(255, 255, 255, 0.72); color: #fff; }
-.pane.weather.sky-clear-night, .pane.weather.sky-cloud-night { --sky: linear-gradient(180deg, #0c1530, #24345e); }
-.pane.weather.sky-cloud { --sky: linear-gradient(180deg, #4f6d8f, #8aa3bd); }
-.pane.weather.sky-rain { --sky: linear-gradient(180deg, #3a4a5e, #64788f); }
-.pane.weather.sky-rain-night { --sky: linear-gradient(180deg, #151d2b, #36445a); }
-.pane.weather.sky-snow { --sky: linear-gradient(180deg, #6b84a3, #a9bcd2); }
-.pane.weather.sky-storm { --sky: linear-gradient(180deg, #232a3a, #4b5468); }
+/* 顏色取自 iPhone 天氣小組件的截圖 */
+.pane.weather.sky-clear { --sky: linear-gradient(180deg, #2c6ccb, #5b9ee6); }
+.pane.weather.sky-cloud { --sky: linear-gradient(180deg, #5d6c82, #7c8ba0); }
+.pane.weather.sky-rain { --sky: linear-gradient(180deg, #4a5466, #5f6879); }
+.pane.weather.sky-snow { --sky: linear-gradient(180deg, #7d8ea6, #a6b4c6); }
+.pane.weather.sky-storm { --sky: linear-gradient(180deg, #2c313e, #444a59); }
+.pane.weather.sky-clear-night { --sky: linear-gradient(180deg, #292a3e, #2f3247 55%, #353b53); }
+.pane.weather.sky-cloud-night { --sky: linear-gradient(180deg, #292a3e, #31354a 55%, #353b52); }
+.pane.weather.sky-overcast-night { --sky: linear-gradient(180deg, #373b46, #353942 55%, #30343f); }
+.pane.weather.sky-rain-night { --sky: linear-gradient(180deg, #2b2f3d, #343947 55%, #3a3f4e); }
+.pane.weather.sky-sunset { --sky: linear-gradient(180deg, #58668a, #737c9f 40%, #908e9c 72%, #a09ba3); }
 .wt-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .wt-city { font-size: 14px; font-weight: 600; }
-.wt-temp { margin-top: 2px; font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 48px; font-weight: 300; line-height: 1.05; letter-spacing: -0.03em; }
+.wt-temp { margin-top: 2px; font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 48px; font-weight: 300; line-height: 1.05; letter-spacing: -0.03em; }
 .wt-icon svg { width: 36px; height: 36px; }
 .wt-desc { font-size: 13px; font-weight: 600; line-height: 1.35; display: flex; flex-direction: column; text-align: right; }
 .wt-desc small { font-weight: 500; font-size: 12px; color: var(--ink-soft); }
@@ -95,7 +124,7 @@
 .aq { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; }
 .aq-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .aq-dots { width: 15px; height: 15px; fill: currentColor; }
-.aq-num { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 46px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; margin-top: auto; }
+.aq-num { font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 46px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; margin-top: auto; }
 .aq-name { font-size: 15px; font-weight: 700; }
 .aq-row { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
 .aq-row .aq-num { margin-top: 0; font-size: 40px; }
@@ -121,7 +150,7 @@
 .batt-item {
   width: 78px;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
-  font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif;
   font-size: 15px; font-weight: 600;
 }
 .card.enter .batt-item, .card.enter .batt-row { animation: pop 0.5s var(--ease-spring) both; }
@@ -148,15 +177,22 @@
 .batt-row .ring { --size: 34px; }
 .batt-row b { font-size: 14px; font-weight: 600; line-height: 1.25; word-break: break-word; }
 .batt-row small { display: block; font-size: 11.5px; color: var(--ink-soft); font-weight: 500; }
-.batt-row .pct { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.batt-row .pct { font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 17px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .batt-row .pct.low { color: #ff453a; }
-/* 充電中：圓環變綠、右下角一個閃電（像 iPhone 的電池小組件） */
+/* 充電中：跟 iPhone「電池」小組件一樣——圓環變綠，閃電放在圓環正上方，
+   圓環在閃電那裡挖一個缺口（不是另外加一個圓形徽章） */
 .ring.charging { --ring-color: var(--ok); }
+.ring.charging::before {
+  -webkit-mask:
+    radial-gradient(closest-side, transparent 84%, #000 86%),
+    radial-gradient(circle at 50% 4%, transparent calc(var(--size) * 0.17), #000 calc(var(--size) * 0.17 + 0.5px));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
 .ring svg.bolt {
-  position: absolute; right: -3px; bottom: -3px;
-  width: 15px; height: 15px; padding: 2px 3px; box-sizing: border-box;
-  border-radius: 50%; background: var(--ok); fill: #fff; stroke: none;
-  box-shadow: 0 0 0 1.5px rgba(20, 22, 28, 0.6);
+  position: absolute; left: 50%; top: 4%; translate: -50% -50%;
+  width: calc(var(--size) * 0.2); height: calc(var(--size) * 0.3);
+  fill: var(--ink); stroke: none;
 }
 .dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; z-index: 1; }
 .dots i { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--fg) / 0.35); transition: background 0.3s; }
@@ -195,7 +231,7 @@
 .cal { height: 100%; padding: 14px 16px; display: flex; gap: 14px; }
 .cal-today { display: flex; flex-direction: column; flex-shrink: 0; }
 .cal-week { font-size: 13px; font-weight: 700; color: #ff453a; }
-.cal-day { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 600; line-height: 1; margin-top: 2px; letter-spacing: -0.02em; }
+.cal-day { font-family: "Inter", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 600; line-height: 1; margin-top: 2px; letter-spacing: -0.02em; }
 .cal-lunar { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 /* 中：「26 ｜十八｜週四」直排 */
 .cal-top { display: flex; align-items: center; gap: 6px; }
@@ -291,10 +327,12 @@ body.bg-light .pane.pinterest { --pn-bg: #fff; }
 .size-m .au-ico svg { width: 16px; height: 16px; }
 
 
-/* ───────── 字體統一（像 Apple）─────────
-   規則：大數字（溫度、時間、AQI、日期）用細字；其他所有字一律粗體；
-   次要的字也是粗體，只是改成灰色（用顏色分主次，不用粗細） */
+/* ───────── 字體：全部粗體（預設，像 iPhone）或全部細體 ─────────
+   外觀頁可以選；次要的字一樣粗細，只是改成灰色（用顏色分主次） */
 .pane { font-weight: 600; }
 .pane :is(small, span, div, p, b, i, strong) { font-weight: inherit; }
 .pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p) { font-weight: 700; }
-.pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 300; }
+.pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 600; }
+body.font-light .pane { font-weight: 400; }
+body.font-light .pane :is(.wt-city, .cal-ev b, .batt-row b, .au-row b, .cal-month-head b, .setup-msg p, .num, .pct) { font-weight: 400; }
+body.font-light .pane :is(.wt-temp, .digital, .aq-num, .cal-day) { font-weight: 300; }

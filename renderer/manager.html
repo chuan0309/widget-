@@ -23,6 +23,7 @@
       <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
       <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
       <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
+      <button data-go="clock"><span data-icon="schedule"></span>世界時鐘</button>
       <button data-go="general"><span data-icon="settings"></span>一般</button>
     </nav>
   </aside>
@@ -55,6 +56,11 @@
         <button class="bg-card" data-bg="glass"><span class="bg-swatch glass"><b>22°</b></span><span>透明玻璃</span></button>
         <button class="bg-card" data-bg="dark"><span class="bg-swatch dark"><b>22°</b></span><span>深色</span></button>
         <button class="bg-card" data-bg="light"><span class="bg-swatch light"><b>22°</b></span><span>淺色</span></button>
+      </div>
+      <h2>字體</h2>
+      <div class="bg-grid two">
+        <button class="bg-card" data-font="bold"><span class="bg-swatch font bold"><b>26</b><small>週四</small></span><span>粗體</span></button>
+        <button class="bg-card" data-font="light"><span class="bg-swatch font light"><b>26</b><small>週四</small></span><span>細體</span></button>
       </div>
       <div id="tintBlock">
       <h2>透明程度</h2>
@@ -93,6 +99,28 @@
           <button class="btn small" id="btTest">顯示</button>
         </div>
       </div>
+
+      <h2>iPhone 充電即時顯示</h2>
+      <div class="group">
+        <label class="row">
+          <span class="row-text"><b>用 iPhone「捷徑」通知電腦</b><small>藍牙不會告訴電腦「正在充電」，只能等電量變多才知道，所以會慢好幾分鐘。打開這個、在 iPhone 設定兩個自動化，一插上充電線就會馬上顯示。</small></span>
+          <input type="checkbox" class="switch" id="phOn" />
+        </label>
+        <div id="phBox" hidden>
+          <div class="row"><span class="row-text"><b>狀態</b><small id="phStatus"></small></span></div>
+          <div class="row"><span class="row-text"><b>接上充電器時的網址</b><small class="mono" id="phPlug"></small></span><button class="btn small" data-copy="phPlug">複製</button></div>
+          <div class="row"><span class="row-text"><b>拔掉充電器時的網址</b><small class="mono" id="phUnplug"></small></span><button class="btn small" data-copy="phUnplug">複製</button></div>
+          <div class="row"><span class="row-text"><b>換一組密碼</b><small>網址外流的話按這個，iPhone 上的網址也要跟著換</small></span><button class="btn small" id="phToken">換密碼</button></div>
+        </div>
+      </div>
+      <ol class="hint ph-steps" id="phSteps" hidden>
+        <li>電腦和 iPhone 要連同一個 Wi-Fi。第一次打開時 Windows 會問要不要允許網路存取，勾「私人網路」按允許。</li>
+        <li>iPhone 打開「捷徑」→ 下面「自動化」→ 右上角 ＋ → 選「充電器」→ 勾「已連接」→ 選「立即執行」→ 下一步。</li>
+        <li>按「新增空白自動化」→ 加入動作「取得電池電量」→ 再加入「取得 URL 內容」。</li>
+        <li>把上面「接上充電器時的網址」貼到 URL 欄，然後在網址最後面點一下，插入變數「電池電量」（網址最後是 level= 加上電池電量）。</li>
+        <li>再做一個一樣的自動化，但是選「已中斷連接」，網址貼「拔掉充電器時的網址」。</li>
+        <li>完成！插上充電線，電量小組件馬上就會出現閃電。</li>
+      </ol>
 
       <h2>已配對的裝置</h2>
       <div class="group" id="deviceList"></div>
@@ -282,6 +310,13 @@
         </form>
       </div>
       <p class="hint" id="wsrcHint">天氣資料來自 Open-Meteo（免費、不用註冊）。</p>
+    </section>
+
+    <!-- 世界時鐘 -->
+    <section data-section="clock">
+      <h1>世界時鐘</h1>
+      <p class="lead">時鐘小組件設成「大」時，會像 iPhone 的世界時鐘一樣顯示 4 個城市（那個城市晚上時錶面會變深色）。</p>
+      <div class="group" id="worldList"></div>
     </section>
 
     <!-- 一般 -->

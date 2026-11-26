@@ -9,6 +9,7 @@ const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
+const { createPhonePush } = require("./phone-push");
 const { createPinterestHome } = require("./pinterest-home");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
@@ -67,8 +68,15 @@ const DEFAULTS = {
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
+  phonePush: { on: false, token: "" }, // iPhone 捷徑：充電器接上／拔掉時直接通知電腦
   pinterestHome: false, // Pinterest 用「首頁推薦」（讀網頁版首頁）
+  // 大時鐘：世界時鐘的 4 個城市
+  worldClocks: [
+    { name: "台北", tz: "Asia/Taipei" }, { name: "東京", tz: "Asia/Tokyo" },
+    { name: "倫敦", tz: "Europe/London" }, { name: "紐約", tz: "America/New_York" },
+  ],
   pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
+  fontWeight: "bold", // 小組件字體：bold 全部粗體／light 全部細體
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
@@ -193,7 +201,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, fontWeight: settings.fontWeight, pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
   sendLayout();
 }
 
@@ -380,7 +388,7 @@ function ensurePopup() {
   popup.webContents.once("did-finish-load", () => {
     popupReady = true;
     popup.showInactive();
-    if (popupDevice) popup.webContents.send("popup:device", popupDevice);
+    if (popupDevice) popup.webContents.send("popup:device", popupPayload(popupDevice));
   });
   popup.on("closed", () => { popup = null; popupReady = false; });
   return popup;
@@ -392,6 +400,8 @@ function placePopup() {
   popup.setPosition(Math.round(bounds.x + (bounds.width - NOTCH_W) / 2), bounds.y);
 }
 
+// 彈窗跟著小組件背景：淺色＝白底，其他＝黑底
+const popupPayload = (d) => ({ ...d, theme: settings.background === "light" ? "light" : "dark" });
 function showPopup(device) {
   popupDevice = device;
   clearTimeout(popupTimer);
@@ -399,7 +409,7 @@ function showPopup(device) {
   if (popupReady) {
     placePopup();
     win.setAlwaysOnTop(true, "screen-saver"); // 全螢幕程式之後也要在最上面
-    win.webContents.send("popup:device", device);
+    win.webContents.send("popup:device", popupPayload(device));
   }
   popupTimer = setTimeout(hidePopup, 15000); // 保險：畫面自己收不起來時
 }
@@ -531,9 +541,15 @@ function evaluateDevices() {
     if (d.connected) lastSeen.set(d.id, now);
     if (d.battery != null) lastBattery.set(d.id, d.battery);
   }
+  const pushed = phonePush.current(); // iPhone 捷徑傳來的充電狀態（有開才有）
   const next = rawDevices.map((d) => {
     const connected = d.connected || now - (lastSeen.get(d.id) ?? -Infinity) < DISCONNECT_GRACE;
-    return { ...d, connected, battery: d.battery ?? (connected ? lastBattery.get(d.id) ?? null : null) };
+    const out = { ...d, connected, battery: d.battery ?? (connected ? lastBattery.get(d.id) ?? null : null) };
+    if (pushed && /iphone/i.test(d.name)) {
+      if (pushed.level != null) out.battery = pushed.level;
+      if (pushed.charging != null) out.charging = pushed.charging;
+    }
+    return out;
   });
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
@@ -563,7 +579,7 @@ function evaluateDevices() {
     // 通知還開著時，電量晚一點才讀到就順便更新
     if (popupDevice && d.id === popupDevice.id && popup && !popup.isDestroyed()) {
       popupDevice = { ...d, alert: popupDevice.alert };
-      popup.webContents.send("popup:device", popupDevice);
+      popup.webContents.send("popup:device", popupPayload(popupDevice));
     }
   }
 }
@@ -676,6 +692,13 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (Array.isArray(patch.worldClocks)) {
+    const ok = (tz) => { try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch { return false; } };
+    const list = patch.worldClocks.slice(0, 4)
+      .map((c) => ({ name: String(c?.name || "").slice(0, 20), tz: String(c?.tz || "") }))
+      .filter((c) => c.name && ok(c.tz));
+    if (list.length === 4) { settings.worldClocks = list; sendHostInit(); }
+  }
   if (Number.isFinite(patch.pinInterval)) {
     settings.pinInterval = Math.min(120, Math.max(10, Math.round(patch.pinInterval)));
     sendHostInit();
@@ -683,6 +706,7 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
   if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
   if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
   if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");
+  if (["bold", "light"].includes(patch.fontWeight)) { settings.fontWeight = patch.fontWeight; sendHostInit(); }
   if (["glass", "dark", "light"].includes(patch.background)) {
     settings.background = patch.background;
     sendToKind(null, "glass:background", settings.background);
@@ -892,6 +916,16 @@ ipcMain.on("open-pin", (_e, link) => {
 /* ───────── IPC ───────── */
 // 中央氣象署：選了它而且有授權碼才用；回傳 null 代表用 Open-Meteo
 const cwa = createCwa(settings, saveSettings, log);
+// iPhone 捷徑：一收到就馬上更新電量小組件；接上充電器時也跳一下瀏海通知
+const phonePush = createPhonePush(settings, saveSettings, (st) => {
+  evaluateDevices();
+  const phone = devices.find((d) => d.connected && /iphone/i.test(d.name));
+  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone || { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
+  else if (phone && popupDevice?.id === phone.id && popup && !popup.isDestroyed()) popup.webContents.send("popup:device", popupPayload(phone));
+}, log);
+ipcMain.handle("phone:info", () => phonePush.info());
+ipcMain.handle("phone:set", (_e, on) => { phonePush.setOn(on); return phonePush.info(); });
+ipcMain.handle("phone:new-token", () => { phonePush.newToken(); return phonePush.info(); });
 ipcMain.handle("weather:cwa", async () => {
   if (settings.weatherSource !== "cwa" || !cwa.hasKey()) return null;
   return cwa.weather(settings.city);
@@ -1001,6 +1035,7 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("click", () => openManager());
     buildTrayMenu();
     startHelper();
+    phonePush.apply();
     createHost();
     refreshWallpaper(true);
     setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換（只看檔案時間，很省）

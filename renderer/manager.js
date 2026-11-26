@@ -131,10 +131,17 @@ function renderLook() {
   $("tint").value = state.settings.tint ?? 30;
   showTint($("tint").value);
   const bg = state.settings.background || "glass";
-  document.querySelectorAll(".bg-card").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
+  document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
   $("tintBlock").hidden = bg !== "glass"; // 透明程度只有玻璃背景才有用
+  const fw = state.settings.fontWeight || "bold";
+  document.querySelectorAll("[data-font]").forEach((c) => c.classList.toggle("on", c.dataset.font === fw));
 }
-document.querySelectorAll(".bg-card").forEach((c) => c.addEventListener("click", () => {
+document.querySelectorAll("[data-font]").forEach((c) => c.addEventListener("click", () => {
+  state.settings.fontWeight = c.dataset.font;
+  renderLook();
+  save({ fontWeight: c.dataset.font }, c.dataset.font === "light" ? "改成細體" : "改成粗體");
+}));
+document.querySelectorAll(".bg-card[data-bg]").forEach((c) => c.addEventListener("click", () => {
   state.settings.background = c.dataset.bg;
   renderLook();
   save({ background: c.dataset.bg }, "已套用");
@@ -599,6 +606,7 @@ function render() {
   renderCalendars();
   renderWeatherSource();
   renderPinInterval();
+  renderWorldClocks();
 }
 // 從小組件右鍵改了大小、或日曆更新時，重新讀一次
 window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
@@ -676,3 +684,55 @@ $("pnHomeLogout").addEventListener("click", async () => {
   renderPinHome();
 });
 renderPinHome();
+
+/* ───────── 世界時鐘的 4 個城市 ───────── */
+const WORLD_CITIES = [
+  ["台北", "Asia/Taipei"], ["東京", "Asia/Tokyo"], ["首爾", "Asia/Seoul"], ["上海", "Asia/Shanghai"], ["香港", "Asia/Hong_Kong"],
+  ["新加坡", "Asia/Singapore"], ["曼谷", "Asia/Bangkok"], ["杜拜", "Asia/Dubai"], ["新德里", "Asia/Kolkata"],
+  ["雪梨", "Australia/Sydney"], ["墨爾本", "Australia/Melbourne"], ["奧克蘭", "Pacific/Auckland"],
+  ["倫敦", "Europe/London"], ["巴黎", "Europe/Paris"], ["柏林", "Europe/Berlin"], ["阿姆斯特丹", "Europe/Amsterdam"],
+  ["蘇黎世", "Europe/Zurich"], ["莫斯科", "Europe/Moscow"], ["伊斯坦堡", "Europe/Istanbul"],
+  ["紐約", "America/New_York"], ["多倫多", "America/Toronto"], ["芝加哥", "America/Chicago"], ["丹佛", "America/Denver"],
+  ["洛杉磯", "America/Los_Angeles"], ["舊金山", "America/Los_Angeles"], ["溫哥華", "America/Vancouver"],
+  ["檀香山", "Pacific/Honolulu"], ["墨西哥城", "America/Mexico_City"], ["聖保羅", "America/Sao_Paulo"],
+  ["開羅", "Africa/Cairo"], ["約翰尼斯堡", "Africa/Johannesburg"],
+];
+function renderWorldClocks() {
+  const list = state.settings.worldClocks || [];
+  $("worldList").replaceChildren(...[0, 1, 2, 3].map((i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const cur = list[i] || {};
+    row.innerHTML = `<span class="row-text"><b>第 ${i + 1} 個城市</b><small>${["左上", "右上", "左下", "右下"][i]}</small></span>
+      <select class="select">${WORLD_CITIES.map(([n, tz]) => `<option value="${n}|${tz}" ${n === cur.name && tz === cur.tz ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    row.querySelector("select").addEventListener("change", (e) => {
+      const next = [0, 1, 2, 3].map((k) => ({ ...(state.settings.worldClocks || [])[k] }));
+      const [name, tz] = e.target.value.split("|");
+      next[i] = { name, tz };
+      save({ worldClocks: next }, `已改成${name}`);
+    });
+    return row;
+  }));
+}
+
+/* ───────── iPhone 充電即時顯示（捷徑） ───────── */
+const PH_STATUS = { on: "開著，等 iPhone 傳過來", starting: "啟動中…", off: "關閉", busy: "連接埠被別的程式用了，重開電腦再試", error: "開不起來，看一下 debug.log" };
+function renderPhone(info) {
+  if (!info) return;
+  $("phOn").checked = info.on;
+  $("phBox").hidden = $("phSteps").hidden = !info.on;
+  let st = PH_STATUS[info.status] || info.status;
+  if (info.last) st = `上次收到：${new Date(info.last.at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}（${info.last.charging ? "充電中" : "沒在充電"}${info.last.level != null ? `，${info.last.level}%` : ""}）`;
+  if (info.on && !info.ips.length) st = "找不到這台電腦的 Wi-Fi 位址，先連上 Wi-Fi";
+  $("phStatus").textContent = st;
+  $("phPlug").textContent = info.plugUrl;
+  $("phUnplug").textContent = info.unplugUrl;
+}
+const phRefresh = () => window.api.phoneInfo?.().then(renderPhone);
+phRefresh();
+setInterval(() => !$("phBox").hidden && phRefresh(), 5000);
+$("phOn").addEventListener("change", async (e) => { renderPhone(await window.api.phoneSet(e.target.checked)); setTimeout(phRefresh, 800); });
+$("phToken").addEventListener("click", async () => { renderPhone(await window.api.phoneNewToken()); toast("已換新密碼，iPhone 上的網址也要更新"); });
+for (const b of document.querySelectorAll("[data-copy]")) b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); toast("已複製"); } catch { toast("複製失敗"); }
+});
