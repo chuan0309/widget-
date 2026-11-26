@@ -761,10 +761,12 @@ WIDGETS.calendar = {
 setInterval(() => refresh("calendar"), 60 * 1000); // 過了時間的行程會消失、跨日會換日期
 
 /* ───────── Pinterest ───────── */
+// 白色圓形裡一個 P（照片牆中間那塊用）
+const PIN_LOGO = `<svg viewBox="0 0 40 40" aria-label="Pinterest"><circle cx="20" cy="20" r="18" fill="currentColor"/><text x="20.5" y="29" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="800" font-size="27" fill="var(--pn-bg)">P</text></svg>`;
 const PIN_BADGE = `<span class="pn-badge" aria-label="Pinterest">P</span>`;
 
 // Pinterest：小 1 張、中 3 張、大 6 張，隨機順序；每隔設定的時間（10～120 分鐘）一格一格淡入換下一批
-const PIN_CELLS = { s: 1, m: 3, l: 6 };
+const PIN_CELLS = { s: 1, m: 3, l: 4 };
 WIDGETS.pinterest = {
   mount(pane, inst) {
     inst.slide = 0;
@@ -829,8 +831,11 @@ WIDGETS.pinterest = {
     pane.__sig = sig;
     const n = PIN_CELLS[inst.size] || 1;
     pane.__html = null;
-    pane.innerHTML = `<div class="pn-grid n${n}">${Array.from({ length: n }, () =>
-      `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`).join("")}</div>`;
+    const cell = `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`;
+    // 大：像 Pinterest 官方小組件，兩欄長短交錯，左邊中間一塊 Pinterest 標誌
+    pane.innerHTML = inst.size === "l"
+      ? `<div class="pn-grid pn-masonry"><div class="pn-mcol a">${cell}<div class="pn-logo">${PIN_LOGO}</div>${cell}</div><div class="pn-mcol b">${cell}${cell}</div></div>`
+      : `<div class="pn-grid n${n}">${cell.repeat(n)}</div>`;
     inst.slide = Math.min(n, r.pins.length) - 1;
     pane.querySelectorAll(".pn-cell").forEach((cell, i) => WIDGETS.pinterest.show(cell, r.pins[i % r.pins.length], inst));
     inst.swappedAt = Date.now();
