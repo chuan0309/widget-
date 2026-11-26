@@ -106,6 +106,7 @@ api.onHostInit?.((d) => {
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
+  if (d.pinInterval) store.pinInterval = d.pinInterval;
   for (const inst of instances.values()) layoutBackdrop(inst);
 });
 
@@ -681,29 +682,28 @@ setInterval(() => refresh("calendar"), 60 * 1000); // 過了時間的行程會�
 /* ───────── Pinterest ───────── */
 const PIN_BADGE = `<span class="pn-badge" aria-label="Pinterest">P</span>`;
 
-// 像 iPhone 的照片小組件：一次一張滿版大圖，隨機順序、每 12 秒淡入換下一張
-const PIN_EVERY = 12000;
+// Pinterest：小 1 張、中 3 張、大 6 張，隨機順序；每隔設定的時間（10～120 分鐘）一格一格淡入換下一批
+const PIN_CELLS = { s: 1, m: 3, l: 6 };
 WIDGETS.pinterest = {
   mount(pane, inst) {
     inst.slide = 0;
+    inst.swappedAt = Date.now();
     inst.timers.push(setInterval(() => {
-      if (paused || inst.el.matches(":hover")) return;
+      const every = (store.pinInterval || 30) * 60 * 1000;
+      if (paused || inst.el.matches(":hover") || Date.now() - inst.swappedAt < every) return;
+      inst.swappedAt = Date.now();
       WIDGETS.pinterest.next(pane, inst);
-    }, PIN_EVERY));
+    }, 20 * 1000));
   },
   tap(pane, inst, target) {
     if (target.closest("[data-setup]")) return api.mgrOpen("pinterest");
-    const link = pane.querySelector(".pn-photo.on")?.dataset.link;
+    const link = target.closest(".pn-cell")?.querySelector(".pn-photo.on")?.dataset.link;
     if (link) api.openPin(link);
   },
-  // 換下一張：先在背後載好，載完才淡入（不會閃白）
-  next(pane, inst) {
-    const pins = store.pins?.pins;
-    const layers = pane.querySelectorAll(".pn-photo");
-    if (!pins?.length || layers.length < 2) return;
-    inst.slide = (inst.slide + 1) % pins.length;
-    const p = pins[inst.slide];
-    const back = [...layers].find((l) => !l.classList.contains("on"));
+  // 一格換一張：先在背後載好再淡入（不會閃白）
+  show(cell, p) {
+    const layers = cell.querySelectorAll(".pn-photo");
+    const back = [...layers].find((l) => !l.classList.contains("on")) || layers[0];
     const img = new Image();
     img.onload = () => {
       back.src = p.img;
@@ -713,6 +713,15 @@ WIDGETS.pinterest = {
     };
     img.src = p.img;
   },
+  next(pane, inst) {
+    const pins = store.pins?.pins;
+    if (!pins?.length) return;
+    pane.querySelectorAll(".pn-cell").forEach((cell, i) => {
+      inst.slide = (inst.slide + 1) % pins.length;
+      const p = pins[inst.slide];
+      setTimeout(() => WIDGETS.pinterest.show(cell, p), i * 700); // 一格一格換
+    });
+  },
   render(pane, inst) {
     const r = store.pins;
     if (!r || r.needSetup || r.needBoard || r.loginExpired || (!r.pins && r.error)) {
@@ -720,19 +729,17 @@ WIDGETS.pinterest = {
       setHTML(pane, `<div class="setup-msg">${PIN_BADGE}<p>Pinterest</p><small>${esc(msg)}</small>${r ? `<span class="setup-btn" data-setup>去設定</span>` : ""}</div>`);
       return;
     }
-    // 同一組圖就不重來（不然會跳回第一張）
+    // 同一組圖就不重來（不然會跳回第一批）
     const sig = r.pins.map((p) => p.img).join("|");
     if (pane.__sig === sig) return;
     pane.__sig = sig;
-    inst.slide = 0;
-    const first = r.pins[0];
+    const n = PIN_CELLS[inst.size] || 1;
     pane.__html = null;
-    pane.innerHTML = `<img class="pn-photo" draggable="false" alt="${esc(first.title)}" data-link="${esc(first.link)}">
-      <img class="pn-photo" draggable="false" alt="">
-      <div class="pn-shade"></div><div class="pn-head">${PIN_BADGE}</div>`;
-    const img = pane.querySelector(".pn-photo");
-    img.onload = () => img.classList.add("on");
-    img.src = first.img;
+    pane.innerHTML = `<div class="pn-grid n${n}">${Array.from({ length: n }, () =>
+      `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`).join("")}</div>`;
+    pane.querySelectorAll(".pn-cell").forEach((cell, i) => WIDGETS.pinterest.show(cell, r.pins[i % r.pins.length]));
+    inst.slide = Math.min(n, r.pins.length) - 1;
+    inst.swappedAt = Date.now();
   },
 };
 async function loadPins() {

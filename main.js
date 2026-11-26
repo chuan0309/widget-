@@ -64,6 +64,7 @@ const DEFAULTS = {
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
+  pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
@@ -188,7 +189,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval });
   sendLayout();
 }
 
@@ -671,6 +672,10 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (Number.isFinite(patch.pinInterval)) {
+    settings.pinInterval = Math.min(120, Math.max(10, Math.round(patch.pinInterval)));
+    sendHostInit();
+  }
   if (typeof patch.cwaKey === "string") cwa.setKey(patch.cwaKey);
   if (["openmeteo", "cwa"].includes(patch.weatherSource)) settings.weatherSource = patch.weatherSource;
   if (typeof patch.cwaKey === "string" || patch.weatherSource) reloadKind("weather");

@@ -597,6 +597,7 @@ function render() {
   renderGeneral();
   renderCalendars();
   renderWeatherSource();
+  renderPinInterval();
 }
 // 從小組件右鍵改了大小、或日曆更新時，重新讀一次
 window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
@@ -641,3 +642,7 @@ $("cwaForm").addEventListener("submit", async (e) => {
     $("cwaMsg").textContent = `沒成功：${r.error}`;
   }
 });
+
+/* ───────── Pinterest 換圖間隔（10～120 分鐘） ───────── */
+function renderPinInterval() { $("pnInterval").value = String(state.settings.pinInterval || 30); }
+$("pnInterval").addEventListener("change", (e) => save({ pinInterval: Number(e.target.value) }, "已套用"));
