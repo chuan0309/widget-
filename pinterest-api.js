@@ -217,14 +217,27 @@ function createPinterestApi({ settings, save }) {
   async function fetchPins() {
     const src = P().source;
     if (!src) return { needBoard: true };
-    const path = src.id === "all" ? "/pins?page_size=50" : `/boards/${encodeURIComponent(src.id)}/pins?page_size=50`;
-    const data = await get(path);
-    const pins = (data.items || []).map((p) => ({
-      img: pinImage(p.media),
-      link: `https://www.pinterest.com/pin/${p.id}/`,
-      title: String(p.title || p.description || p.alt_text || "").slice(0, 120),
-    })).filter((p) => /^https:\/\/i\.pinimg\.com\//.test(p.img));
+    const base = src.id === "all" ? "/pins" : `/boards/${encodeURIComponent(src.id)}/pins`;
+    // 多抓一點（最多 500 張），小組件會隨機輪播
+    const seen = new Set();
+    const pins = [];
+    let bookmark = "";
+    for (let page = 0; page < 5; page++) {
+      const q = new URLSearchParams({ page_size: "100" });
+      if (bookmark) q.set("bookmark", bookmark);
+      const data = await get(`${base}?${q}`);
+      for (const p of data.items || []) {
+        const img = pinImage(p.media);
+        if (!/^https:\/\/i\.pinimg\.com\//.test(img) || seen.has(img)) continue;
+        seen.add(img);
+        pins.push({ img, link: `https://www.pinterest.com/pin/${p.id}/`, title: String(p.title || p.description || p.alt_text || "").slice(0, 120) });
+      }
+      bookmark = data.bookmark;
+      if (!bookmark) break;
+    }
     if (pins.length === 0) return { title: src.name, error: "這個圖版裡還沒有圖片" };
+    // 洗牌：每次順序都不一樣
+    for (let i = pins.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pins[i], pins[j]] = [pins[j], pins[i]]; }
     return { title: src.name, pins };
   }
 

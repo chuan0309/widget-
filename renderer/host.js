@@ -23,6 +23,13 @@ function setHTML(el, html) {
 const setTint = (v) => document.body.style.setProperty("--t", String(Math.min(100, Math.max(0, Number(v))) / 100));
 setTint(30);
 api.onTint?.(setTint);
+// 背景：透明玻璃／深色／淺色
+const setBackground = (b) => {
+  document.body.classList.remove("bg-glass", "bg-dark", "bg-light");
+  document.body.classList.add(`bg-${["dark", "light"].includes(b) ? b : "glass"}`);
+};
+setBackground("glass");
+api.onBackground?.(setBackground);
 
 /* ───────── 日期小工具 ───────── */
 const WEEK = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -98,6 +105,7 @@ api.onHostInit?.((d) => {
   wall = d.wall;
   wallRect = computeWallRect(d.area, d.scale);
   if (d.tint != null) setTint(d.tint);
+  if (d.background) setBackground(d.background);
   for (const inst of instances.values()) layoutBackdrop(inst);
 });
 
@@ -219,7 +227,7 @@ document.addEventListener("mousemove", (e) => {
 document.addEventListener("mouseleave", () => !dragging && setInteractive(false));
 
 /* ───────── 拖動＋自動對齊 ───────── */
-const NO_DRAG = "button, input, a, select, textarea, label, .pn-pin, .stack-dots i";
+const NO_DRAG = "button, input, a, select, textarea, label, .stack-dots i";
 function instOf(el) {
   const card = el.closest?.(".card");
   for (const inst of instances.values()) if (inst.el === card) return inst;
@@ -363,6 +371,17 @@ function weatherLook(code) {
   if (code <= 77 || code === 85 || code === 86) return ["下雪", "snowy", "#fff"];
   return ["雷雨", "storm", "#ffd60a"];
 }
+// 「晚上7時」這種說法（跟 iPhone 一樣）
+function hourLabel(h) {
+  const part = h < 6 ? "凌晨" : h < 12 ? "上午" : h === 12 ? "中午" : h < 18 ? "下午" : "晚上";
+  return `${part}${h % 12 || 12}時`;
+}
+// 溫度條的顏色：冷的偏藍綠、熱的偏橘紅（像 Apple 天氣）
+function tempColor(t) {
+  const stops = [[4, "#64c8f0"], [9, "#6fd0c8"], [13, "#8ed4a8"], [17, "#b3d777"], [21, "#e3d44e"], [25, "#f6bd3c"], [30, "#f58a3b"], [35, "#ff453a"]];
+  for (const [v, c] of stops) if (t <= v) return c;
+  return "#ff453a";
+}
 // 天氣背景：像 Apple 天氣一樣用天空的顏色
 function skyClass(code, isDay) {
   const night = isDay === 0;
@@ -372,7 +391,12 @@ function skyClass(code, isDay) {
   if (code <= 77 || code === 85 || code === 86) return "sky-snow";
   return "sky-storm";
 }
-const wIcon = (code) => { const [, name, color] = weatherLook(code); return `<span style="color:${color}">${icon(name)}</span>`; };
+// 晚上的晴天／少雲換成月亮
+const wIcon = (code, night = false) => {
+  const [, name, color] = weatherLook(code);
+  if (night && code <= 2) return `<span style="color:#fff">${icon("clear_night")}</span>`;
+  return `<span style="color:${color}">${icon(name)}</span>`;
+};
 
 let weatherAt = 0;
 async function loadWeather(force = false) {
@@ -383,8 +407,8 @@ async function loadWeather(force = false) {
   store.city = city;
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
-      "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code" +
-      "&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=6";
+      "&current=temperature_2m,weather_code,is_day&hourly=temperature_2m,weather_code,is_day" +
+      "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max&timezone=auto&forecast_days=6";
     store.weather = await (await fetch(url)).json();
     store.weatherError = false;
   } catch {
@@ -406,9 +430,10 @@ WIDGETS.weather = {
       return;
     }
     const cur = data.current;
-    const [desc, iconName, color] = weatherLook(cur.weather_code);
+    let [desc, iconName, color] = weatherLook(cur.weather_code);
+    if (cur.is_day === 0 && cur.weather_code <= 2) { iconName = "clear_night"; color = "#fff"; if (cur.weather_code === 0) desc = "晴朗"; }
     pane.className = `pane weather ${skyClass(cur.weather_code, data.current.is_day)}`;
-    const range = `高 ${Math.round(data.daily.temperature_2m_max[0])}° 低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
+    const range = `最高 ${Math.round(data.daily.temperature_2m_max[0])}° 最低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
     if (inst.size === "s") {
       setHTML(pane, `<div class="wt">
         <div class="wt-top"><div class="wt-city">${esc(city.name)}</div><span class="wt-icon" style="color:${color}">${icon(iconName)}</span></div>
@@ -417,20 +442,26 @@ WIDGETS.weather = {
       return;
     }
     const nowIdx = Math.max(0, data.hourly.time.findIndex((t) => new Date(t) > new Date()) - 1);
-    const hours = data.hourly.time.slice(nowIdx, nowIdx + 6).map((t, i) => {
+    const hours = data.hourly.time.slice(nowIdx, nowIdx + 5).map((t, i) => {
       const k = nowIdx + i;
-      return `<div class="wt-hour"><small>${i === 0 ? "現在" : new Date(t).getHours() + "時"}</small>
-        ${wIcon(data.hourly.weather_code[k])}<span>${Math.round(data.hourly.temperature_2m[k])}°</span></div>`;
+      return `<div class="wt-hour"><small>${i === 0 ? "現在" : hourLabel(new Date(t).getHours())}</small>
+        ${wIcon(data.hourly.weather_code[k], data.hourly.is_day?.[k] === 0)}<span>${Math.round(data.hourly.temperature_2m[k])}°</span></div>`;
     }).join("");
     let days = "";
     if (inst.size === "l") {
       const min = Math.min(...data.daily.temperature_2m_min), max = Math.max(...data.daily.temperature_2m_max);
       days = `<div class="wt-days">${data.daily.time.slice(0, 5).map((t, i) => {
         const a = data.daily.temperature_2m_min[i], b = data.daily.temperature_2m_max[i];
-        const left = ((a - min) / (max - min || 1)) * 100, width = ((b - a) / (max - min || 1)) * 100;
+        const pos = (v) => ((v - min) / (max - min || 1)) * 100;
+        const left = pos(a), width = pos(b) - pos(a);
+        // 今天：白點標出現在幾度（跟 iPhone 一樣）
+        const dot = i === 0 ? `<b class="wt-now" style="left:${Math.min(100, Math.max(0, pos(cur.temperature_2m)))}%"></b>` : "";
+        const rain = data.daily.precipitation_probability_max?.[i];
+        const rainTag = rain >= 30 ? `<small class="wt-rain">${rain}%</small>` : "";
+        const night = i === 0 && cur.is_day === 0;
         return `<div class="wt-day"><span>${i === 0 ? "今天" : "週" + WEEK_SHORT[new Date(t).getDay()]}</span>
-          ${wIcon(data.daily.weather_code[i])}<span class="lo">${Math.round(a)}°</span>
-          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%"></i></span><span>${Math.round(b)}°</span></div>`;
+          <span class="wt-dicon">${wIcon(data.daily.weather_code[i], night)}${rainTag}</span><span class="lo">${Math.round(a)}°</span>
+          <span class="wt-bar"><i style="left:${left}%;width:${Math.max(width, 4)}%;background:linear-gradient(90deg,${tempColor(a)},${tempColor(b)})"></i>${dot}</span><span class="hi">${Math.round(b)}°</span></div>`;
       }).join("")}</div>`;
     }
     setHTML(pane, `<div class="wt">
@@ -571,13 +602,18 @@ function evTime(ev) {
 const evHTML = (ev) => `<div class="cal-ev" style="--c:${esc(ev.color)}"><b>${esc(ev.title)}</b><small>${evTime(ev)}</small></div>`;
 const upcoming = (events, now) => events.filter((e) => (e.allDay ? e.end - 1 : e.end) >= (e.allDay ? dayStart(now).getTime() : now.getTime()));
 function groupedList(events, max, now) {
-  let html = "", last = "";
+  let html = "", last = "", lastDay = null;
+  const dayOf = (ev) => dayStart(new Date(Math.max(ev.start, dayStart(now).getTime()))).getTime();
   for (const ev of events.slice(0, max)) {
-    const d = new Date(Math.max(ev.start, dayStart(now).getTime()));
-    const label = sameDay(d, now) ? "今天" : `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`;
+    const d = new Date(dayOf(ev));
+    const label = sameDay(d, now) ? "今天" : `${d.getMonth() + 1}月${d.getDate()}日${WEEK[d.getDay()]}`;
     if (label !== last) { html += `<div class="cal-head">${label}</div>`; last = label; }
     html += evHTML(ev);
+    lastDay = d.getTime();
   }
+  // 最後那天還有放不下的行程：「其他 N 個行程」（跟 iPhone 一樣）
+  const more = events.slice(max).filter((ev) => dayOf(ev) === lastDay).length;
+  if (more) html += `<div class="cal-more">其他 ${more} 個行程</div>`;
   return html;
 }
 
@@ -593,10 +629,15 @@ WIDGETS.calendar = {
     const events = upcoming(cal.events, now);
     const todayEv = events.filter((e) => e.start < dayStart(new Date(now.getTime() + 864e5)).getTime());
     const l = lunar(now);
-    const todayBlock = `<div class="cal-today">
-        <span class="cal-week">${WEEK[now.getDay()]}</span><span class="cal-day">${now.getDate()}</span>
-        <span class="cal-lunar">${l.day ? "農曆" + l.month + l.day : ""}</span>
-        ${todayEv.length === 0 && inst.size === "m" ? `<span class="cal-empty">今天沒有行程</span>` : ""}</div>`;
+    // 像 iPhone：大大的日期，旁邊直排農曆和紅色星期
+    const vert = (text, cls) => `<span class="cal-v ${cls}">${[...text].map((c) => `<i>${c}</i>`).join("")}</span>`;
+    const todayBlock = inst.size === "m"
+      ? `<div class="cal-today">
+          <div class="cal-top"><span class="cal-day">${now.getDate()}</span>${l.day ? vert(l.day, "lunar") : ""}${vert("週" + WEEK_SHORT[now.getDay()], "week")}</div>
+          ${todayEv.length === 0 ? `<span class="cal-empty">今天沒有行程</span>` : ""}</div>`
+      : `<div class="cal-today">
+          <span class="cal-week">${WEEK[now.getDay()]}</span><span class="cal-day">${now.getDate()}</span>
+          <span class="cal-lunar">${l.day ? "農曆" + l.month + l.day : ""}</span></div>`;
     if (inst.size === "s") {
       const next = events[0];
       const when = next && !sameDay(new Date(Math.max(next.start, now.getTime())), now)
@@ -631,21 +672,37 @@ setInterval(() => refresh("calendar"), 60 * 1000); // 過了時間的行程會�
 /* ───────── Pinterest ───────── */
 const PIN_BADGE = `<span class="pn-badge" aria-label="Pinterest">P</span>`;
 
+// 像 iPhone 的照片小組件：一次一張滿版大圖，隨機順序、每 12 秒淡入換下一張
+const PIN_EVERY = 12000;
 WIDGETS.pinterest = {
   mount(pane, inst) {
     inst.slide = 0;
-    if (inst.size === "s") {
-      inst.timers.push(setInterval(() => {
-        const imgs = pane.querySelectorAll(".pn-pin");
-        if (paused || imgs.length < 2) return;
-        imgs[inst.slide % imgs.length].classList.remove("on");
-        inst.slide = (inst.slide + 1) % imgs.length;
-        imgs[inst.slide].classList.add("on");
-      }, 8000));
-    }
+    inst.timers.push(setInterval(() => {
+      if (paused || inst.el.matches(":hover")) return;
+      WIDGETS.pinterest.next(pane, inst);
+    }, PIN_EVERY));
   },
   tap(pane, inst, target) {
-    if (target.closest("[data-setup]")) api.mgrOpen("pinterest");
+    if (target.closest("[data-setup]")) return api.mgrOpen("pinterest");
+    const link = pane.querySelector(".pn-photo.on")?.dataset.link;
+    if (link) api.openPin(link);
+  },
+  // 換下一張：先在背後載好，載完才淡入（不會閃白）
+  next(pane, inst) {
+    const pins = store.pins?.pins;
+    const layers = pane.querySelectorAll(".pn-photo");
+    if (!pins?.length || layers.length < 2) return;
+    inst.slide = (inst.slide + 1) % pins.length;
+    const p = pins[inst.slide];
+    const back = [...layers].find((l) => !l.classList.contains("on"));
+    const img = new Image();
+    img.onload = () => {
+      back.src = p.img;
+      back.dataset.link = p.link;
+      back.alt = p.title;
+      layers.forEach((l) => l.classList.toggle("on", l === back));
+    };
+    img.src = p.img;
   },
   render(pane, inst) {
     const r = store.pins;
@@ -654,27 +711,19 @@ WIDGETS.pinterest = {
       setHTML(pane, `<div class="setup-msg">${PIN_BADGE}<p>Pinterest</p><small>${esc(msg)}</small>${r ? `<span class="setup-btn" data-setup>去設定</span>` : ""}</div>`);
       return;
     }
-    // 同一組圖就不重畫（不然圖片會重新載入、閃一下）
-    const sig = r.pins.map((p) => p.img).join("|") + inst.size;
+    // 同一組圖就不重來（不然會跳回第一張）
+    const sig = r.pins.map((p) => p.img).join("|");
     if (pane.__sig === sig) return;
     pane.__sig = sig;
-    const pinImg = (p) => `<img class="pn-pin" src="${esc(p.img)}" alt="${esc(p.title)}" title="${esc(p.title)}" draggable="false" decoding="async" loading="lazy" data-link="${esc(p.link)}">`;
-    if (inst.size === "s") {
-      pane.innerHTML = `<div class="pn-head">${PIN_BADGE}</div><div class="pn-wall"><div class="pn-col a">${r.pins.map(pinImg).join("")}</div></div>`;
-      inst.slide = 0;
-      pane.querySelector(".pn-pin")?.classList.add("on");
-    } else {
-      const n = inst.size === "m" ? 3 : 2;
-      const cols = Array.from({ length: n }, () => []);
-      r.pins.forEach((p, i) => cols[i % n].push(p));
-      // 同一組放兩次，捲到一半時剛好接回開頭，看起來就是無限捲動
-      pane.innerHTML = `<div class="pn-head">${PIN_BADGE}<b>${esc(r.title || "Pinterest")}</b></div>
-        <div class="pn-wall">${cols.map((c, i) => `<div class="pn-col" style="--dur:${Math.max(20, c.length * [7, 9, 8][i])}s">${c.map(pinImg).join("")}${c.map(pinImg).join("")}</div>`).join("")}</div>`;
-    }
-    pane.querySelectorAll(".pn-pin").forEach((img) => {
-      img.addEventListener("load", () => img.classList.add("loaded"), { once: true });
-      img.addEventListener("click", () => api.openPin(img.dataset.link));
-    });
+    inst.slide = 0;
+    const first = r.pins[0];
+    pane.__html = null;
+    pane.innerHTML = `<img class="pn-photo" draggable="false" alt="${esc(first.title)}" data-link="${esc(first.link)}">
+      <img class="pn-photo" draggable="false" alt="">
+      <div class="pn-shade"></div><div class="pn-head">${PIN_BADGE}</div>`;
+    const img = pane.querySelector(".pn-photo");
+    img.onload = () => img.classList.add("on");
+    img.src = first.img;
   },
 };
 async function loadPins() {

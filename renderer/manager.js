@@ -129,7 +129,15 @@ $("resetPos").addEventListener("click", () => { window.api.mgrResetPositions(); 
 function renderLook() {
   $("tint").value = state.settings.tint ?? 30;
   showTint($("tint").value);
+  const bg = state.settings.background || "glass";
+  document.querySelectorAll(".bg-card").forEach((c) => c.classList.toggle("on", c.dataset.bg === bg));
+  $("tintBlock").hidden = bg !== "glass"; // 透明程度只有玻璃背景才有用
 }
+document.querySelectorAll(".bg-card").forEach((c) => c.addEventListener("click", () => {
+  state.settings.background = c.dataset.bg;
+  renderLook();
+  save({ background: c.dataset.bg }, "已套用");
+}));
 // 透明程度滑桿：拖的時候即時預覽（不存檔），放開時才存
 function showTint(v) { $("tintPreview").style.setProperty("--t", String(v / 100)); }
 $("tint").addEventListener("input", (e) => { showTint(e.target.value); window.api.previewTint(Number(e.target.value)); });

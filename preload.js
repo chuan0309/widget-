@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("api", {
   hostMove: (key, x, y) => ipcRenderer.send("host:move", key, x, y),
   onWeatherRefresh: (cb) => ipcRenderer.on("weather:refresh", () => cb()),
   onTint: (cb) => ipcRenderer.on("glass:tint", (_e, v) => cb(v)),
+  onBackground: (cb) => ipcRenderer.on("glass:background", (_e, v) => cb(v)),
   previewTint: (v) => ipcRenderer.send("glass:tint-preview", v),
   mgrOpen: (section) => ipcRenderer.send("mgr:open", section),
   mgrOpenUrl: (url) => ipcRenderer.send("mgr:open-url", url),

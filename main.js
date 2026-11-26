@@ -61,6 +61,7 @@ const DEFAULTS = {
   calendar: { sources: [] }, // Google 日曆的 iCal 私人網址（加密存）
   batteryWidget: { hidden: {}, order: [] }, // 電量小組件：哪些裝置不要顯示、排列順序
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
+  background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
 };
@@ -184,7 +185,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background });
   sendLayout();
 }
 
@@ -665,6 +666,10 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (["glass", "dark", "light"].includes(patch.background)) {
+    settings.background = patch.background;
+    sendToKind(null, "glass:background", settings.background);
+  }
   if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
   if ("desktopLayer" in patch) {
     settings.desktopLayer = !!patch.desktopLayer;
