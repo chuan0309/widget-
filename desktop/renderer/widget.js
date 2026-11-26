@@ -19,21 +19,15 @@ function tick() {
 if (kind === "clock") { tick(); setInterval(tick, 1000); }
 
 /* ───────── 天氣（Open-Meteo，免費、不用註冊）───────── */
-const SUN = '<circle cx="20" cy="20" r="8" fill="#ffc93b" style="filter:drop-shadow(0 0 6px #ffc93b)"/>';
-const CLOUD = (x = 0, y = 0, o = 0.95) =>
-  `<path transform="translate(${x} ${y})" fill="rgba(255,255,255,${o})" d="M12 32h18a7 7 0 0 0 0-14 9 9 0 0 0-17 3 5.5 5.5 0 0 0-1 11z"/>`;
-const DROPS = '<path stroke="#64d2ff" stroke-width="2.4" stroke-linecap="round" d="M14 35l-2 4M21 35l-2 4M28 35l-2 4"/>';
-const FLAKES = '<g fill="#fff"><circle cx="13" cy="37" r="1.8"/><circle cx="21" cy="38" r="1.8"/><circle cx="29" cy="37" r="1.8"/></g>';
-const BOLT = '<path fill="#ffd60a" d="M21 31l-5 8h4l-2 6 7-9h-4l2-5z"/>';
-
+// 天氣代碼 → [說明, 圖示, 顏色]
 function weatherLook(code) {
-  if (code === 0) return ["晴天", SUN];
-  if (code <= 2) return ["晴時多雲", SUN.replace('cx="20" cy="20"', 'cx="15" cy="14"') + CLOUD(4, 2)];
-  if (code === 3) return ["陰天", CLOUD(0, -4)];
-  if (code <= 48) return ["起霧", CLOUD(0, -6, 0.6) + '<path stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".7" d="M8 34h24M12 39h20"/>'];
-  if (code <= 67 || (code >= 80 && code <= 82)) return ["下雨", CLOUD(0, -8) + DROPS];
-  if (code <= 77 || code === 85 || code === 86) return ["下雪", CLOUD(0, -8) + FLAKES];
-  return ["雷雨", CLOUD(0, -8) + BOLT];
+  if (code === 0) return ["晴天", "sunny", "#ffd60a"];
+  if (code <= 2) return ["晴時多雲", "partly_cloudy", "#fff"];
+  if (code === 3) return ["陰天", "cloud", "#fff"];
+  if (code <= 48) return ["起霧", "foggy", "#fff"];
+  if (code <= 67 || (code >= 80 && code <= 82)) return ["下雨", "rainy", "#64d2ff"];
+  if (code <= 77 || code === 85 || code === 86) return ["下雪", "snowy", "#fff"];
+  return ["雷雨", "storm", "#ffd60a"];
 }
 
 async function loadWeather() {
@@ -43,10 +37,11 @@ async function loadWeather() {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}` +
       "&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
     const data = await (await fetch(url)).json();
-    const [desc, icon] = weatherLook(data.current.weather_code);
+    const [desc, iconName, color] = weatherLook(data.current.weather_code);
     $("wtTemp").textContent = `${Math.round(data.current.temperature_2m)}°`;
     $("wtDesc").textContent = desc;
-    $("wtIcon").innerHTML = `<svg viewBox="0 0 40 46">${icon}</svg>`;
+    $("wtIcon").innerHTML = icon(iconName);
+    $("wtIcon").style.color = color;
     $("wtRange").textContent =
       `高 ${Math.round(data.daily.temperature_2m_max[0])}° 低 ${Math.round(data.daily.temperature_2m_min[0])}°`;
   } catch {
@@ -138,8 +133,8 @@ if (kind === "battery") initBattery();
 /* ───────── Pinterest ───────── */
 const pnCard = document.querySelector(".pinterest");
 let hasPins = false;
-const PIN_SVG = '<svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7"/></svg>';
-const LOCK_SVG = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const PIN_SVG = icon("pin");
+const LOCK_SVG = icon("lock");
 
 function pinElement(pin) {
   const img = document.createElement("img");
@@ -241,6 +236,8 @@ async function openBoards() {
 }
 
 async function initPinterest() {
+  $("pnBadge").innerHTML = icon("pin");
+  $("pnGear").innerHTML = icon("swap");
   const status = await window.api.pinterestStatus();
   $("pnAppId").value = status.clientId;
   $("pnRedirect").textContent = status.redirectUri;

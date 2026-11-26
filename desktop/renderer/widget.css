@@ -25,7 +25,7 @@
 .wt-city { font-size: 14px; font-weight: 600; }
 .wt-temp { margin-top: 2px; font-size: 46px; font-weight: 300; line-height: 1.05; }
 .wt-icon { position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; }
-.wt-icon svg { width: 100%; height: 100%; }
+.wt-icon svg { width: 100%; height: 100%; fill: currentColor; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2)); }
 .wt-desc { margin-top: auto; font-size: 13px; font-weight: 600; line-height: 1.35; display: flex; flex-direction: column; }
 .wt-desc small { font-weight: 500; font-size: 12px; color: var(--ink-soft); }
 
@@ -63,9 +63,7 @@
   background: #e60023;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45);
 }
-.pn-badge svg, .pn-gear svg {
-  width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
-}
+.pn-badge svg, .pn-gear svg { width: 15px; height: 15px; }
 .pn-gear {
   width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
   display: grid; place-items: center;
@@ -178,10 +176,10 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
   display: grid; place-items: center;
 }
-.pn-thumb svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pn-thumb svg { width: 20px; height: 20px; }
 .pn-board-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pn-board-meta { font-size: 11px; color: var(--ink-soft); display: flex; align-items: center; gap: 4px; }
-.pn-board-meta svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.pn-board-meta svg { width: 12px; height: 12px; fill: currentColor; }
 .pn-msg {
   position: absolute; left: 20px; right: 20px; bottom: 18px;
   padding: 8px 12px; border-radius: 14px;

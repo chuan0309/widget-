@@ -104,10 +104,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .ring.low { --ring-color: #ff453a; }
 .ring.unknown { --ring-color: rgba(255, 255, 255, 0.45); }
-.ring svg {
+.ring svg:not(.ms) {
   width: calc(var(--size) * 0.4); height: calc(var(--size) * 0.4);
   fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
+
+/* Material Symbols 圖示：實心白色 */
+svg.ms { fill: #fff; stroke: none; }
+.ring svg.ms { width: calc(var(--size) * 0.46); height: calc(var(--size) * 0.46); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

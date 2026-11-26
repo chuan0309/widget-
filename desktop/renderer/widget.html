@@ -37,11 +37,9 @@
   <!-- Pinterest -->
   <div class="card pinterest" data-kind="pinterest" hidden>
     <header class="pn-head">
-      <span class="pn-badge"><svg viewBox="0 0 24 24"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3zM12 14v7"/></svg></span>
+      <span class="pn-badge" id="pnBadge"></span>
       <b id="pnTitle">Pinterest</b>
-      <button class="pn-gear" id="pnGear" aria-label="換圖版" title="換圖版">
-        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>
-      </button>
+      <button class="pn-gear" id="pnGear" aria-label="換圖版" title="換圖版"></button>
     </header>
 
     <div class="pn-wall" id="pnWall">
@@ -100,6 +98,7 @@
     <div class="pn-msg" id="pnMsg" hidden></div>
   </div>
 
+  <script src="icons.js"></script>
   <script src="devices.js"></script>
   <script src="widget.js"></script>
 </body>

@@ -77,3 +77,7 @@ Pinterest 規定要用官方 API，得先申請一個「開發者 App」，只�
 - 按 Win + D（顯示桌面）時小組件會一起被藏起來，點系統匣圖示可以叫回來
 - 毛玻璃模式的圓角是 Windows 11 系統決定的（比較小），要大圓角請切換成「透明圓角」
 - 天氣資料來自 [Open-Meteo](https://open-meteo.com/)（免費、不用註冊）
+
+## 圖示來源
+
+裝置、天氣等圖示來自 Google 的 [Material Symbols](https://fonts.google.com/icons)（Apache License 2.0），授權全文在 `desktop/renderer/ICONS-LICENSE.txt`。

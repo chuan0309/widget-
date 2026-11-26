@@ -23,33 +23,8 @@ h1 {
 
 .art { position: relative; width: 200px; height: 170px; margin: 10px 0 4px; display: grid; place-items: center; }
 
-/* 耳機＋充電盒插圖（純 CSS） */
-.case-shape {
-  position: absolute; left: 40px; top: 56px; width: 120px; height: 100px;
-  border-radius: 34px;
-  background: linear-gradient(160deg, #fff, #dfe3ea 60%, #c5cad3);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.3), inset 0 -4px 8px rgba(0, 0, 0, 0.08);
-  animation: float 3.5s ease-in-out infinite;
-}
-.case-shape .lid { position: absolute; left: 0; right: 0; top: 34px; height: 1.5px; background: rgba(0, 0, 0, 0.12); }
-.case-shape .led { position: absolute; left: 50%; top: 56px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
-.bud {
-  position: absolute; top: 8px; width: 38px; height: 62px;
-  border-radius: 20px 20px 16px 16px;
-  background: linear-gradient(160deg, #fff, #d8dce3);
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
-}
-.bud::after {
-  content: ""; position: absolute; left: 13px; top: 46px; width: 12px; height: 34px; border-radius: 6px;
-  background: linear-gradient(90deg, #e8ebf0, #fff, #d7dbe2);
-}
-.bl { left: 34px; transform: rotate(-14deg); animation: floatL 3.5s ease-in-out infinite; }
-.br { right: 34px; transform: rotate(14deg); animation: floatR 3.5s ease-in-out infinite 0.3s; }
+/* 玻璃圓球裡放裝置圖示 */
 @keyframes float { 50% { transform: translateY(-6px); } }
-@keyframes floatL { 50% { transform: rotate(-14deg) translateY(-8px); } }
-@keyframes floatR { 50% { transform: rotate(14deg) translateY(-8px); } }
-
-/* 其他裝置：玻璃圓球裡放圖示 */
 .orb {
   width: 130px; height: 130px; border-radius: 50%;
   display: grid; place-items: center;
@@ -57,7 +32,8 @@ h1 {
   box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.6), inset 0 -6px 14px rgba(0, 0, 0, 0.2), 0 14px 30px rgba(0, 0, 0, 0.3);
   animation: float 3.5s ease-in-out infinite;
 }
-.orb svg { width: 58px; height: 58px; fill: none; stroke: #fff; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.orb svg { width: 68px; height: 68px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25)); }
+.orb.low { background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.08) 60%), rgba(255, 69, 58, 0.4); }
 
 /* 電量：圓環在上、百分比在下 */
 .batt { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 22px; font-weight: 700; }
