@@ -781,18 +781,31 @@ WIDGETS.pinterest = {
     const link = target.closest(".pn-cell")?.querySelector(".pn-photo.on")?.dataset.link;
     if (link) api.openPin(link);
   },
-  // 一格換一張：先在背後載好再淡入（不會閃白）
-  show(cell, p) {
+  // 一格換一張：先在背後載好再淡入（不會閃白）；載不到先試原本的網址，再不行就換下一張
+  show(cell, p, inst, tries = 0) {
     const layers = cell.querySelectorAll(".pn-photo");
     const back = [...layers].find((l) => !l.classList.contains("on")) || layers[0];
-    const img = new Image();
-    img.onload = () => {
-      back.src = p.img;
-      back.dataset.link = p.link;
-      back.alt = p.title;
-      layers.forEach((l) => l.classList.toggle("on", l === back));
+    const urls = [p.img, p.orig].filter((u, i, a) => u && a.indexOf(u) === i);
+    const attempt = (k) => {
+      const img = new Image();
+      img.onload = () => {
+        back.src = urls[k];
+        back.dataset.link = p.link;
+        back.alt = p.title || "";
+        layers.forEach((l) => l.classList.toggle("on", l === back));
+      };
+      img.onerror = () => {
+        if (k + 1 < urls.length) return attempt(k + 1);
+        console.warn("pin image failed", urls.join(" | "));
+        const pins = store.pins?.pins;
+        if (inst && pins?.length > 1 && tries < 5) {
+          inst.slide = (inst.slide + 1) % pins.length;
+          WIDGETS.pinterest.show(cell, pins[inst.slide], inst, tries + 1);
+        }
+      };
+      img.src = urls[k];
     };
-    img.src = p.img;
+    attempt(0);
   },
   next(pane, inst) {
     const pins = store.pins?.pins;
@@ -800,7 +813,7 @@ WIDGETS.pinterest = {
     pane.querySelectorAll(".pn-cell").forEach((cell, i) => {
       inst.slide = (inst.slide + 1) % pins.length;
       const p = pins[inst.slide];
-      setTimeout(() => WIDGETS.pinterest.show(cell, p), i * 700); // 一格一格換
+      setTimeout(() => WIDGETS.pinterest.show(cell, p, inst), i * 700); // 一格一格換
     });
   },
   render(pane, inst) {
@@ -818,8 +831,8 @@ WIDGETS.pinterest = {
     pane.__html = null;
     pane.innerHTML = `<div class="pn-grid n${n}">${Array.from({ length: n }, () =>
       `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`).join("")}</div>`;
-    pane.querySelectorAll(".pn-cell").forEach((cell, i) => WIDGETS.pinterest.show(cell, r.pins[i % r.pins.length]));
     inst.slide = Math.min(n, r.pins.length) - 1;
+    pane.querySelectorAll(".pn-cell").forEach((cell, i) => WIDGETS.pinterest.show(cell, r.pins[i % r.pins.length], inst));
     inst.swappedAt = Date.now();
   },
 };

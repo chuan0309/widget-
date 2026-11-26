@@ -106,8 +106,9 @@ function createPinterestHome(log = () => {}) {
         if (/\/login/.test(r.url)) break;
         for (const p of r.pins) {
           // 換成比較清楚的大小（736 寬）
-          const img = p.img.replace(/\/(\d+x\d*|originals)\//, "/736x/");
-          if (!seen.has(img)) seen.set(img, { ...p, img, link: p.link || HOME });
+          // 736 寬的版本一定是 .jpg（.png 換過去會 403）；原本的網址留著，載不到時用
+          const img = p.img.replace(/\/(\d+x\d*|originals)\//, "/736x/").replace(/\.(png|gif|webp)$/i, ".jpg");
+          if (!seen.has(img)) seen.set(img, { ...p, img, orig: p.img, link: p.link || HOME });
         }
         await win.webContents.executeJavaScript("window.scrollBy(0, window.innerHeight * 1.5)", true);
       }
