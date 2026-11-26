@@ -23,6 +23,7 @@
       <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
       <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
       <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
+      <button data-go="clock"><span data-icon="schedule"></span>世界時鐘</button>
       <button data-go="general"><span data-icon="settings"></span>一般</button>
     </nav>
   </aside>
@@ -282,6 +283,13 @@
         </form>
       </div>
       <p class="hint" id="wsrcHint">天氣資料來自 Open-Meteo（免費、不用註冊）。</p>
+    </section>
+
+    <!-- 世界時鐘 -->
+    <section data-section="clock">
+      <h1>世界時鐘</h1>
+      <p class="lead">時鐘小組件設成「大」時，會像 iPhone 的世界時鐘一樣顯示 4 個城市（那個城市晚上時錶面會變深色）。</p>
+      <div class="group" id="worldList"></div>
     </section>
 
     <!-- 一般 -->

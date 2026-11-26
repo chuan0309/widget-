@@ -599,6 +599,7 @@ function render() {
   renderCalendars();
   renderWeatherSource();
   renderPinInterval();
+  renderWorldClocks();
 }
 // 從小組件右鍵改了大小、或日曆更新時，重新讀一次
 window.api.onMgrRefresh?.(async () => { state = await window.api.mgrGet(); render(); });
@@ -676,3 +677,33 @@ $("pnHomeLogout").addEventListener("click", async () => {
   renderPinHome();
 });
 renderPinHome();
+
+/* ───────── 世界時鐘的 4 個城市 ───────── */
+const WORLD_CITIES = [
+  ["台北", "Asia/Taipei"], ["東京", "Asia/Tokyo"], ["首爾", "Asia/Seoul"], ["上海", "Asia/Shanghai"], ["香港", "Asia/Hong_Kong"],
+  ["新加坡", "Asia/Singapore"], ["曼谷", "Asia/Bangkok"], ["杜拜", "Asia/Dubai"], ["新德里", "Asia/Kolkata"],
+  ["雪梨", "Australia/Sydney"], ["墨爾本", "Australia/Melbourne"], ["奧克蘭", "Pacific/Auckland"],
+  ["倫敦", "Europe/London"], ["巴黎", "Europe/Paris"], ["柏林", "Europe/Berlin"], ["阿姆斯特丹", "Europe/Amsterdam"],
+  ["蘇黎世", "Europe/Zurich"], ["莫斯科", "Europe/Moscow"], ["伊斯坦堡", "Europe/Istanbul"],
+  ["紐約", "America/New_York"], ["多倫多", "America/Toronto"], ["芝加哥", "America/Chicago"], ["丹佛", "America/Denver"],
+  ["洛杉磯", "America/Los_Angeles"], ["舊金山", "America/Los_Angeles"], ["溫哥華", "America/Vancouver"],
+  ["檀香山", "Pacific/Honolulu"], ["墨西哥城", "America/Mexico_City"], ["聖保羅", "America/Sao_Paulo"],
+  ["開羅", "Africa/Cairo"], ["約翰尼斯堡", "Africa/Johannesburg"],
+];
+function renderWorldClocks() {
+  const list = state.settings.worldClocks || [];
+  $("worldList").replaceChildren(...[0, 1, 2, 3].map((i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const cur = list[i] || {};
+    row.innerHTML = `<span class="row-text"><b>第 ${i + 1} 個城市</b><small>${["左上", "右上", "左下", "右下"][i]}</small></span>
+      <select class="select">${WORLD_CITIES.map(([n, tz]) => `<option value="${n}|${tz}" ${n === cur.name && tz === cur.tz ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    row.querySelector("select").addEventListener("change", (e) => {
+      const next = [0, 1, 2, 3].map((k) => ({ ...(state.settings.worldClocks || [])[k] }));
+      const [name, tz] = e.target.value.split("|");
+      next[i] = { name, tz };
+      save({ worldClocks: next }, `已改成${name}`);
+    });
+    return row;
+  }));
+}

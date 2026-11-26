@@ -68,6 +68,11 @@ const DEFAULTS = {
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
   pinterestHome: false, // Pinterest 用「首頁推薦」（讀網頁版首頁）
+  // 大時鐘：世界時鐘的 4 個城市
+  worldClocks: [
+    { name: "台北", tz: "Asia/Taipei" }, { name: "東京", tz: "Asia/Tokyo" },
+    { name: "倫敦", tz: "Europe/London" }, { name: "紐約", tz: "America/New_York" },
+  ],
   pinInterval: 30, // Pinterest 小組件換圖間隔（分鐘，10～120）
   background: "glass", // 小組件背景：glass 透明玻璃／dark 深色／light 淺色
   desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
@@ -193,7 +198,7 @@ function wallpaperArea() {
 }
 function sendHostInit() {
   if (!hostWin || hostWin.isDestroyed()) return;
-  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval });
+  hostWin.webContents.send("host:init", { host: hostArea, wall: wallInfo, ...wallpaperArea(), tint: settings.tint, background: settings.background, pinInterval: settings.pinInterval, worldClocks: settings.worldClocks });
   sendLayout();
 }
 
@@ -676,6 +681,13 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
+  if (Array.isArray(patch.worldClocks)) {
+    const ok = (tz) => { try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch { return false; } };
+    const list = patch.worldClocks.slice(0, 4)
+      .map((c) => ({ name: String(c?.name || "").slice(0, 20), tz: String(c?.tz || "") }))
+      .filter((c) => c.name && ok(c.tz));
+    if (list.length === 4) { settings.worldClocks = list; sendHostInit(); }
+  }
   if (Number.isFinite(patch.pinInterval)) {
     settings.pinInterval = Math.min(120, Math.max(10, Math.round(patch.pinInterval)));
     sendHostInit();

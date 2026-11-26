@@ -41,6 +41,18 @@
 .hand.s { width: 1.4px; height: 43%; translate: -50% 0; background: #ff9500; z-index: 3; }
 .hand.s::after { content: ""; position: absolute; left: 50%; bottom: -18%; width: 100%; height: 18%; translate: -50% 0; background: inherit; }
 .pin { position: absolute; z-index: 4; width: 5.5%; height: 5.5%; left: 50%; top: 50%; translate: -50% -50%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px #ff9500; }
+/* 世界時鐘（大）：2×2，城市名＋時差；晚上的城市錶面變深色 */
+.world { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; padding: 14px 12px 10px; }
+.wc { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 0; }
+.size-l .wc .analog { --d: 118px; }
+.wc b { font-size: 14px; font-weight: 700; margin-top: 6px; line-height: 1.1; }
+.wc small { font-size: 11px; color: var(--ink-soft); }
+.wc.night .analog { background: #1c1c1e; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.wc.night .num { color: #fff; }
+.wc.night .analog::before { background: repeating-conic-gradient(from -0.35deg, rgba(255, 255, 255, 0.45) 0 0.7deg, transparent 0.7deg 6deg); }
+.wc.night .analog::after { background: repeating-conic-gradient(from -0.9deg, #fff 0 1.8deg, transparent 1.8deg 30deg); }
+.wc.night .hand.h::before, .wc.night .hand.h::after, .wc.night .hand.m::before, .wc.night .hand.m::after { background: #fff; }
+.wc.night .pin { background: #1c1c1e; }
 .clock-info { display: flex; flex-direction: column; }
 .digital { font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 300; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .clock-meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--ink-soft); }

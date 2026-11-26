@@ -107,6 +107,7 @@ api.onHostInit?.((d) => {
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
   if (d.pinInterval) store.pinInterval = d.pinInterval;
+  if (Array.isArray(d.worldClocks)) { store.worldClocks = d.worldClocks; refresh("clock"); }
   for (const inst of instances.values()) layoutBackdrop(inst);
 });
 
@@ -330,26 +331,53 @@ api.onPaused?.((p) => { mainPaused = p; updatePaused(); });
 const WIDGETS = {};
 
 /* ───────── 時鐘 ───────── */
+// 錶面（白天白色、晚上深色），中、小時鐘和世界時鐘共用
+const faceHTML = () => `<div class="analog">${Array.from({ length: 12 }, (_, i) => {
+  const a = ((i + 1) * 30 - 90) * Math.PI / 180;
+  return `<span class="num" style="left:${50 + 33.5 * Math.cos(a)}%;top:${50 + 33.5 * Math.sin(a)}%">${i + 1}</span>`;
+}).join("")}<i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>`;
+function setHands(face, h, m, s) {
+  const [hh, mm, ss] = face.__hands ||= [".hand.h", ".hand.m", ".hand.s"].map((q) => face.querySelector(q));
+  hh.style.transform = `rotate(${(h % 12) * 30 + m * 0.5}deg)`;
+  mm.style.transform = `rotate(${m * 6 + s * 0.1}deg)`;
+  ss.style.transform = `rotate(${s * 6}deg)`;
+}
+
+// 世界時鐘：某個時區現在的時、分、秒、日期（用瀏覽器內建的時區資料）
+const tzFormat = new Map();
+function zoned(tz, now) {
+  if (!tzFormat.has(tz)) tzFormat.set(tz, new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric",
+  }));
+  const p = Object.fromEntries(tzFormat.get(tz).formatToParts(now).map((x) => [x.type, Number(x.value)]));
+  return p; // { year, month, day, hour, minute, second }
+}
+// 「今天，+1 小時」這種說明（跟這台電腦的時間比）
+function zoneNote(z, now) {
+  const there = Date.UTC(z.year, z.month - 1, z.day, z.hour, z.minute);
+  const here = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes());
+  const diff = Math.round((there - here) / 36e5 * 2) / 2;
+  const dayDiff = Math.round((Date.UTC(z.year, z.month - 1, z.day) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
+  const day = dayDiff > 0 ? "明天" : dayDiff < 0 ? "昨天" : "今天";
+  return `${day}，${diff === 0 ? "同一時間" : `${diff > 0 ? "+" : ""}${diff} 小時`}`;
+}
+const DEFAULT_WORLD = [
+  { name: "台北", tz: "Asia/Taipei" }, { name: "東京", tz: "Asia/Tokyo" },
+  { name: "倫敦", tz: "Europe/London" }, { name: "紐約", tz: "America/New_York" },
+];
+
 WIDGETS.clock = {
-  mount(pane) {
-    pane.innerHTML = `
-      <div class="analog">${Array.from({ length: 12 }, (_, i) => {
-        const a = ((i + 1) * 30 - 90) * Math.PI / 180;
-        return `<span class="num" style="left:${50 + 33.5 * Math.cos(a)}%;top:${50 + 33.5 * Math.sin(a)}%">${i + 1}</span>`;
-      }).join("")}<i class="hand h"></i><i class="hand m"></i><i class="hand s"></i><i class="pin"></i></div>
+  mount(pane, inst) {
+    if (inst.size === "l") return; // 大的是世界時鐘，render 時才建
+    pane.innerHTML = `${faceHTML()}
       <div class="clock-info"><div class="digital"></div>
         <div class="clock-meta"><span class="cm-week"></span><b class="cm-day"></b></div>
         <div class="clock-date"></div><div class="lunar"></div></div>`;
-    pane.__h = pane.querySelector(".hand.h");
-    pane.__m = pane.querySelector(".hand.m");
-    pane.__s = pane.querySelector(".hand.s");
   },
-  render(pane) {
+  render(pane, inst) {
     const now = new Date();
-    const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-    pane.__h.style.transform = `rotate(${(h % 12) * 30 + m * 0.5}deg)`;
-    pane.__m.style.transform = `rotate(${m * 6 + s * 0.1}deg)`;
-    pane.__s.style.transform = `rotate(${s * 6}deg)`;
+    if (inst.size === "l") return WIDGETS.clock.world(pane, now);
+    setHands(pane.querySelector(".analog"), now.getHours(), now.getMinutes(), now.getSeconds());
     const set = (sel, text) => { const el = pane.querySelector(sel); if (el.textContent !== text) el.textContent = text; };
     set(".digital", hhmm(now));
     set(".cm-week", WEEK[now.getDay()]);
@@ -357,6 +385,24 @@ WIDGETS.clock = {
     set(".clock-date", `${now.getMonth() + 1}月${now.getDate()}日 ${WEEK[now.getDay()]}`);
     const l = lunar(now);
     set(".lunar", l.day ? `農曆${l.month}${l.day}` : "");
+  },
+  // 大：像 iPhone 的世界時鐘，4 個城市 2×2；那個城市晚上時錶面變深色
+  world(pane, now) {
+    const cities = (store.worldClocks || DEFAULT_WORLD).slice(0, 4);
+    const sig = cities.map((c) => c.tz + c.name).join("|");
+    if (pane.__world !== sig) {
+      pane.__world = sig;
+      pane.__html = null;
+      pane.innerHTML = `<div class="world">${cities.map((c) => `<div class="wc">${faceHTML()}<b>${esc(c.name)}</b><small></small></div>`).join("")}</div>`;
+    }
+    pane.querySelectorAll(".wc").forEach((cell, i) => {
+      const z = zoned(cities[i].tz, now);
+      setHands(cell.querySelector(".analog"), z.hour, z.minute, z.second);
+      cell.classList.toggle("night", z.hour < 6 || z.hour >= 18);
+      const note = zoneNote(z, now);
+      const small = cell.querySelector("small");
+      if (small.textContent !== note) small.textContent = note;
+    });
   },
 };
 function tick() { if (!paused) refresh("clock"); }
