@@ -22,17 +22,10 @@ function regQuery(key, name) {
   });
 }
 
-// 回傳一個「指紋」，用來判斷桌布有沒有換
-async function fingerprint() {
-  const transcoded = transcodedPath();
-  let mtime = 0;
-  try { mtime = fs.statSync(transcoded).mtimeMs; } catch {}
-  const [file, style, tile] = await Promise.all([
-    regQuery(DESKTOP_KEY, "WallPaper"),
-    regQuery(DESKTOP_KEY, "WallpaperStyle"),
-    regQuery(DESKTOP_KEY, "TileWallpaper"),
-  ]);
-  return JSON.stringify([mtime, file, style, tile]);
+// 回傳一個「指紋」，用來判斷桌布有沒有換：只看 Windows 實際顯示的那張桌布檔案的修改時間
+// （每 30 秒看一次，不用開任何程式，幾乎不花資源）
+function fingerprint() {
+  try { return String(fs.statSync(transcodedPath()).mtimeMs); } catch { return ""; }
 }
 
 function transcodedPath() {

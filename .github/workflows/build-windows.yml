@@ -27,6 +27,27 @@ jobs:
       - name: Install
         run: npm ci
 
+      # 先檢查 PowerShell 腳本：語法對不對、裡面的 C# 能不能編譯、背景小幫手跑得起來
+      - name: Check PowerShell scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($f in Get-ChildItem *.ps1) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            if ($errs) { $errs | ForEach-Object { Write-Error "$($f.Name): $_" } }
+            Write-Host "parsed $($f.Name)"
+          }
+          $src = Get-Content helper.ps1 -Raw
+          foreach ($m in [regex]::Matches($src, "(?s)Add-Type -TypeDefinition @'\r?\n(.*?)\r?\n'@")) {
+            Add-Type -TypeDefinition $m.Groups[1].Value
+            Write-Host "compiled C# block"
+          }
+          # 跑 8 秒，至少要回報一次裝置清單（雲端電腦可能沒有音效卡，所以藍牙或音訊其中一個就好）
+          $out = cmd /c "powershell -NoProfile -Command Start-Sleep 8 | powershell -NoProfile -ExecutionPolicy Bypass -File helper.ps1"
+          Write-Host ($out -join "`n")
+          if (-not ($out | Where-Object { $_ -match '^(audio|bt) ' })) { throw 'helper.ps1 did not report anything' }
+
       - name: Set version
         id: version
         shell: bash

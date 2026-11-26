@@ -34,6 +34,7 @@ function close() {
 }
 
 window.api.onPopupDevice((d) => (d ? open(d) : null));
+window.api.onPopupClose?.(() => notch.classList.contains("pill") && close());
 
 // 滑鼠移到瀏海上時才接收點擊；點一下就收起來；停在上面時不要自動收
 notch.addEventListener("mouseenter", () => { window.api.popupMouse(true); clearTimeout(closeTimer); });
