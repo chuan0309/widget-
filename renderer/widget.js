@@ -6,39 +6,75 @@ document.body.className = `glass-${params.get("glass") || "acrylic"} size-${size
 const setTintVar = (v) => document.body.style.setProperty("--t", String(Math.min(100, Math.max(0, Number(v))) / 100));
 setTintVar(params.get("tint") ?? 30);
 window.api.onTint?.(setTintVar);
-document.querySelector(`[data-kind="${kind}"]`).hidden = false;
+// 疊放：同一個視窗裡放好幾個小組件，用滑鼠滾輪上下換
+const items = kind === "stack" ? (params.get("items") || "").split(",").filter(Boolean) : [kind];
+const has = (k) => items.includes(k);
+for (const k of items) document.querySelector(`[data-kind="${k}"]`).hidden = false;
 
 /* ───────── 圓角毛玻璃：模糊的桌布對準小組件的位置 ───────── */
-const card = document.querySelector(`[data-kind="${kind}"]`);
+const card = kind === "stack" ? buildStack() : document.querySelector(`[data-kind="${kind}"]`);
+
+function buildStack() {
+  // 外面一層玻璃，裡面一個可以上下捲的區域，每個小組件佔一整格
+  const wrap = document.createElement("div");
+  wrap.className = "card stack";
+  const scroll = document.createElement("div");
+  scroll.className = "stack-scroll";
+  const dots = document.createElement("div");
+  dots.className = "stack-dots";
+  for (const k of items) {
+    const c = document.querySelector(`[data-kind="${k}"]`);
+    c.classList.add("in-stack");
+    scroll.append(c);
+    const dot = document.createElement("i");
+    dot.addEventListener("click", () => c.scrollIntoView({ behavior: "smooth" }));
+    dots.append(dot);
+  }
+  wrap.append(scroll, dots);
+  document.body.append(wrap);
+  const current = () => Math.round(scroll.scrollTop / Math.max(1, scroll.clientHeight));
+  const mark = () => [...dots.children].forEach((d, i) => d.classList.toggle("on", i === current()));
+  scroll.addEventListener("scroll", () => requestAnimationFrame(mark));
+  requestAnimationFrame(mark);
+  // 「智慧型輪播」：每 20 秒自動換下一個（滑鼠在上面時不換）
+  if (params.get("rotate") === "1" && items.length > 1) {
+    setInterval(() => {
+      if (paused || wrap.matches(":hover")) return;
+      const next = (current() + 1) % items.length;
+      scroll.children[next].scrollIntoView({ behavior: "smooth" });
+    }, 20000);
+  }
+  return wrap;
+}
 let wall = null;
 let backdropEl = null;
 
+// 只模糊「小組件後面那一塊」桌布（多留一點邊，模糊的邊緣才不會變淡），
+// 不要整張桌布一起模糊 —— 這樣顯示卡的工作量只有原本的幾十分之一，拖動時也順
+const BLEED = 48;
 function layoutBackdrop({ win, area, scale }) {
   if (!wall || !backdropEl) return;
-  if (wall.mode === "color") {
-    backdropEl.style.cssText = `inset:-40px;background:${wall.color}`;
-    return;
-  }
-  // 照 Windows 的「調整方式」算出桌布在螢幕上畫在哪裡、多大
+  const st = backdropEl.style;
+  st.left = st.top = `${-BLEED}px`;
+  st.width = `${win.width + BLEED * 2}px`;
+  st.height = `${win.height + BLEED * 2}px`;
+  if (wall.mode === "color") { st.background = wall.color; return; }
+  // 照 Windows 的「調整方式」算出整張桌布在螢幕上畫在哪裡、多大
   const iw = wall.width / scale, ih = wall.height / scale; // 圖片原始大小（換成螢幕座標）
   let w = area.width, h = area.height;
   if (wall.mode === "fill" || wall.mode === "span") {
     const k = Math.max(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
   } else if (wall.mode === "fit") {
     const k = Math.min(area.width / iw, area.height / ih); w = iw * k; h = ih * k;
-  } else if (wall.mode === "center") {
+  } else if (wall.mode === "center" || wall.mode === "tile") {
     w = iw; h = ih;
   }
-  const x = area.x + (area.width - w) / 2 - win.x;
-  const y = area.y + (area.height - h) / 2 - win.y;
-  const st = backdropEl.style;
-  if (wall.mode === "tile") {
-    st.left = `${area.x - win.x}px`; st.top = `${area.y - win.y}px`;
-    st.width = `${area.width}px`; st.height = `${area.height}px`;
-    st.backgroundRepeat = "repeat"; st.backgroundSize = `${iw}px ${ih}px`;
-  } else {
-    st.left = `${x}px`; st.top = `${y}px`; st.width = `${w}px`; st.height = `${h}px`;
-  }
+  // 桌布左上角相對於「模糊區塊左上角」的位置
+  const x = (wall.mode === "tile" ? area.x : area.x + (area.width - w) / 2) - win.x + BLEED;
+  const y = (wall.mode === "tile" ? area.y : area.y + (area.height - h) / 2) - win.y + BLEED;
+  st.backgroundRepeat = wall.mode === "tile" ? "repeat" : "no-repeat";
+  st.backgroundSize = `${w}px ${h}px`;
+  st.backgroundPosition = `${x}px ${y}px`;
 }
 
 window.api.onBackdrop?.((data) => {
@@ -58,6 +94,28 @@ window.api.onBackdrop?.((data) => {
 
 const $ = (id) => document.getElementById(id);
 const escapeHTML = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/* ───────── 拖動小組件 ───────── */
+// 按住小組件空白的地方拖動；按鈕、輸入框、Pinterest 圖片這些不會觸發拖動
+const NO_DRAG = "button, input, a, select, textarea, label, .pn-pin, .pn-boards, .no-drag";
+let drag = null;
+document.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest(NO_DRAG)) return;
+  drag = { x: e.screenX, y: e.screenY, dx: 0, dy: 0, raf: 0 };
+  e.target.setPointerCapture?.(e.pointerId);
+  window.api.dragStart();
+});
+document.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  drag.dx = e.screenX - drag.x;
+  drag.dy = e.screenY - drag.y;
+  if (!drag.raf) drag.raf = requestAnimationFrame(() => {
+    if (drag) { window.api.dragMove(drag.dx, drag.dy); drag.raf = 0; }
+  });
+});
+const endDrag = () => { if (drag) { window.api.dragEnd(); drag = null; } };
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 
 /* ───────── 右鍵選單（大小、移除） ───────── */
 window.addEventListener("contextmenu", (e) => { e.preventDefault(); window.api.widgetMenu(); });
@@ -115,7 +173,7 @@ function tick() {
   const l = lunar(now);
   $("lunar").textContent = l.day ? `農曆${l.month}${l.day}` : "";
 }
-if (kind === "clock") every(1000, tick);
+if (has("clock")) every(1000, tick);
 
 /* ───────── 天氣（Open-Meteo，免費、不用註冊）───────── */
 // 天氣代碼 → [說明, 圖示, 顏色]
@@ -187,21 +245,25 @@ function renderWeather(city, data) {
     </div>
     <div class="wt-hours">${hours}</div>${days}`;
 }
-if (kind === "weather") every(60 * 1000, loadWeather);
+if (has("weather")) every(60 * 1000, loadWeather);
 
 /* ───────── 電量 ───────── */
 let pcBattery = null; // 只有筆電才會有；桌機不顯示
 let btDevices = [];
+let battPrefs = { hidden: {}, order: [] }; // 在管理程式設定：哪些不顯示、順序
 let battPage = 0;
 let battPageJob = null;
 
 function batteryList() {
   const list = [];
-  if (pcBattery) list.push({ name: "這台電腦", type: "laptop", battery: Math.round(pcBattery.level * 100), sub: pcBattery.charging ? "充電中" : "" });
-  for (const d of btDevices.filter((d) => d.connected).sort((a, b) => (a.battery ?? 101) - (b.battery ?? 101))) {
-    list.push({ name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, sub: d.battery == null ? "已連線" : "" });
+  if (pcBattery) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(pcBattery.level * 100), sub: pcBattery.charging ? "充電中" : "" });
+  for (const d of btDevices.filter((d) => d.connected)) {
+    list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, sub: d.battery == null ? "已連線" : "" });
   }
-  return list;
+  // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面
+  const order = battPrefs.order || [];
+  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e6 + (it.battery ?? 101) : i; };
+  return list.filter((it) => !battPrefs.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
 
 function ringHTML(it) {
@@ -250,8 +312,11 @@ async function initBattery() {
     b.addEventListener("levelchange", read);
     b.addEventListener("chargingchange", read);
   }
-  btDevices = (await window.api.getState()).devices;
+  const st = await window.api.getState();
+  btDevices = st.devices;
+  battPrefs = st.batteryPrefs || battPrefs;
   renderBattery();
+  window.api.onBatteryPrefs?.((p) => { battPrefs = p; renderBattery(); });
   window.api.onDevices((list) => { btDevices = list; if (!paused) renderBattery(); });
   // 裝置太多時每 6 秒翻頁（滑鼠在上面時不翻）
   battPageJob = every(6000, () => {
@@ -262,7 +327,118 @@ async function initBattery() {
     renderBattery();
   }, { now: false });
 }
-if (kind === "battery") initBattery();
+if (has("battery")) initBattery();
+
+/* ───────── 音訊輸出 ───────── */
+let outputs = [];
+// Windows 的名稱像「耳機 (INZONE Buds)」：括號裡才是裝置名稱，外面是種類
+const GENERIC = /^(喇叭|揚聲器|耳機|耳麥|頭戴式耳機|speakers?|headphones?|headset( earphone)?|earphones?|digital audio|數位音訊|realtek.*)$/i;
+function splitName(name) {
+  const m = String(name).match(/^(.*?)\s*\((.+)\)$/);
+  if (!m) return { title: name, sub: "" };
+  return GENERIC.test(m[1].trim()) ? { title: m[2], sub: m[1] } : { title: m[1], sub: m[2] };
+}
+function outputIcon(name) {
+  const t = deviceType(name);
+  if (t !== "other" && t !== "phone") return t;
+  if (/monitor|display|hdmi|displayport|samsung|lg |dell|benq|asus|顯示器|螢幕/i.test(name)) return "pc";
+  return "speaker";
+}
+
+function renderAudio() {
+  if (outputs.length === 0) {
+    $("au").innerHTML = `<div class="setup-msg"><span class="au-ico" style="width:46px;height:46px">${icon("speaker")}</span><small>沒有找到音訊輸出裝置</small></div>`;
+    return;
+  }
+  const cur = outputs.find((o) => o.default) || outputs[0];
+  if (size === "s") {
+    const n = splitName(cur.name);
+    $("au").innerHTML = `<button class="au-now" title="點一下換到下一個輸出">
+        <span class="au-ico">${icon(outputIcon(cur.name))}</span>
+        <b>${escapeHTML(n.title)}</b><small>${outputs.length > 1 ? "點一下切換" : escapeHTML(n.sub || "目前的輸出")}</small></button>`;
+    $("au").querySelector("button").addEventListener("click", () => {
+      const next = outputs[(outputs.indexOf(cur) + 1) % outputs.length];
+      window.api.audioSet(next.id);
+    });
+    return;
+  }
+  const max = size === "l" ? 7 : 3;
+  // 目前的放第一個
+  const list = [cur, ...outputs.filter((o) => o !== cur)].slice(0, max);
+  $("au").innerHTML = `<div class="au-head">${icon("speaker")}音訊輸出</div>` + list.map((o) => {
+    const n = splitName(o.name);
+    return `<button class="au-row ${o === cur ? "on" : ""}" data-id="${escapeHTML(o.id)}">
+      <span class="au-ico">${icon(outputIcon(o.name))}</span>
+      <span class="au-text"><b>${escapeHTML(n.title)}</b>${n.sub ? `<small>${escapeHTML(n.sub)}</small>` : ""}</span>
+      ${o === cur ? `<span class="au-check">${icon("check_circle")}</span>` : ""}</button>`;
+  }).join("");
+  $("au").querySelectorAll(".au-row").forEach((b) => b.addEventListener("click", () => window.api.audioSet(b.dataset.id)));
+}
+
+async function initAudio() {
+  outputs = (await window.api.audioGet()).outputs || [];
+  renderAudio();
+  window.api.onAudio((list) => { outputs = list; if (!paused) renderAudio(); });
+}
+if (has("audio")) initAudio();
+
+/* ───────── 手機連結 ───────── */
+let phoneData = { notifications: [], error: "" };
+let phoneDevices = [];
+
+function phoneTime(ms) {
+  if (!ms) return "";
+  const d = new Date(ms), now = new Date();
+  const t = d.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", hour12: true });
+  if (sameDay(d, now)) return t;
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  return sameDay(d, y) ? `昨天 ${t}` : `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function renderPhone() {
+  // 手機本身：從藍牙裝置裡找手機（連線狀態、電量）
+  const phone = phoneDevices.find((d) => d.connected && deviceType(d.name, d.cod) === "phone")
+    || phoneDevices.find((d) => deviceType(d.name, d.cod) === "phone");
+  const name = phone?.name || "手機連結";
+  const state = phone
+    ? `<span class="ph-dot ${phone.connected ? "" : "off"}"></span>${phone.connected ? "已連線" : "未連線"}` +
+      (phone.connected && phone.battery != null ? `<span class="ring ${phone.battery <= 20 ? "low" : ""}" style="--p:${phone.battery}"></span>${phone.battery}%` : "")
+    : "";
+  const head = `<div class="ph-head"><span class="ph-ico">${icon("phone")}</span><b>${escapeHTML(name)}</b><span class="ph-state">${state}</span></div>`;
+
+  let list;
+  if (phoneData.error) {
+    list = `<div class="ph-empty">${phoneData.error === "notfound" ? "找不到 Windows 的通知紀錄" : "讀不到手機通知"}<br>點一下打開「手機連結」</div>`;
+  } else if (phoneData.notifications.length === 0) {
+    list = `<div class="ph-empty">沒有新的手機通知<br><small>手機連結要開啟「顯示通知橫幅」</small></div>`;
+  } else {
+    const max = size === "l" ? 4 : size === "m" ? 2 : 1;
+    list = phoneData.notifications.slice(0, max).map((n) => {
+      const logo = n.logo ? `<img class="ph-logo" src="${n.logo}" alt="">` : `<span class="ph-logo">${escapeHTML((n.app || "?").slice(0, 1))}</span>`;
+      return `<div class="ph-n">${logo}
+        <span class="ph-app">${escapeHTML(n.app || "通知")}</span><span class="ph-time">${phoneTime(n.time)}</span>
+        <div class="ph-text"><b>${escapeHTML(n.title)}</b><span>${escapeHTML(n.body)}</span></div></div>`;
+    }).join("");
+  }
+  $("ph").innerHTML = (size === "s" ? head.replace('<span class="ph-state">', '<span class="ph-state" style="display:none">') : head) + `<div class="ph-list">${list}</div>`;
+}
+
+async function initPhone() {
+  const st = await window.api.getState();
+  phoneDevices = st.devices || [];
+  phoneData = await window.api.phoneGet();
+  renderPhone();
+  window.api.onPhone((d) => { phoneData = d; if (!paused) renderPhone(); });
+  window.api.onDevices((list) => { phoneDevices = list; if (!paused) renderPhone(); });
+  every(60 * 1000, renderPhone, { now: false }); // 時間文字（「昨天」）跟著更新
+  // 點一下（不是拖動）就打開手機連結
+  let downAt = null;
+  $("ph").addEventListener("pointerdown", (e) => (downAt = [e.screenX, e.screenY]));
+  $("ph").addEventListener("click", (e) => {
+    if (downAt && Math.hypot(e.screenX - downAt[0], e.screenY - downAt[1]) < 4) window.api.phoneOpen();
+  });
+}
+if (has("phone")) initPhone();
 
 /* ───────── Google 日曆 ───────── */
 let calData = null;
@@ -348,7 +524,7 @@ async function initCalendar() {
   window.api.onCalUpdate((d) => { calData = d; if (!paused) renderCalendar(); });
   every(60 * 1000, renderCalendar, { now: false }); // 每分鐘重畫（過了時間的行程會消失、跨日會換日期）
 }
-if (kind === "calendar") initCalendar();
+if (has("calendar")) initCalendar();
 
 /* ───────── Pinterest ───────── */
 const pnCard = document.querySelector(".pinterest");
@@ -359,6 +535,8 @@ const LOCK_SVG = icon("lock");
 function pinElement(pin) {
   const img = document.createElement("img");
   img.className = "pn-pin";
+  img.decoding = "async"; // 圖片在背景解碼，不卡畫面
+  img.loading = "lazy";
   img.src = pin.img;
   img.alt = pin.title || "";
   img.title = pin.title || "";
@@ -390,7 +568,7 @@ function renderPins({ title, pins }) {
     col.style.setProperty("--dur", `${Math.max(20, cols[i].length * [7, 9, 8][i])}s`);
   });
 }
-if (kind === "pinterest" && size === "s") {
+if (has("pinterest") && size === "s") {
   every(8000, () => {
     const imgs = $("pnColA").children;
     if (imgs.length < 2) return;
@@ -505,7 +683,16 @@ async function initPinterest() {
   }, 30 * 60 * 1000);
 
   document.querySelectorAll("[data-go]").forEach((b) =>
-    b.addEventListener("click", () => showView(b.dataset.go)));
+    b.addEventListener("click", async () => {
+      // 打包時就有 Pinterest App 資料 → 不用填表，直接到瀏覽器登入
+      if (b.dataset.go === "login" && status.builtIn && b.closest('[data-view="choice"]')) {
+        showView("wait");
+        const res = await window.api.pinterestLogin("", "");
+        if (res.ok) openBoards(); else showView("choice", res.error);
+        return;
+      }
+      showView(b.dataset.go);
+    }));
 
   // 公開網址
   $("pnRssForm").addEventListener("submit", async (e) => {
@@ -541,4 +728,4 @@ async function initPinterest() {
     else showView("choice");
   });
 }
-if (kind === "pinterest") initPinterest();
+if (has("pinterest")) initPinterest();

@@ -23,13 +23,21 @@
       "wallpaper.js",
       "calendar.js",
       "desktop-pin.ps1",
+      "google.js",
+      "oauth.json",
+      "audio.ps1",
+      "locate.ps1",
+      "phone.ps1",
       "bt-watch.ps1",
       "renderer/**",
       "assets/**"
     ],
     "asarUnpack": [
       "bt-watch.ps1",
-      "desktop-pin.ps1"
+      "desktop-pin.ps1",
+      "audio.ps1",
+      "locate.ps1",
+      "phone.ps1"
     ],
     "win": {
       "target": [

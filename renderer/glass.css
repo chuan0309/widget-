@@ -24,7 +24,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   position: absolute;
   inset: 0;
   overflow: hidden;
-  -webkit-app-region: drag;
+  contain: layout paint;
+  /* 拖動改由程式處理（widget.js），不用 -webkit-app-region，按鈕才不會被吃掉 */
+  touch-action: none;
 }
 
 /* ── 模式一：Windows 11 毛玻璃（模糊由系統負責，這裡只加高光和反光）── */
@@ -59,7 +61,7 @@ body { --t: 0.3; }
   z-index: 0;
   pointer-events: none;
   background-repeat: no-repeat;
-  background-size: 100% 100%;
+  will-change: transform;
   filter: blur(calc(10px + var(--t) * 26px)) saturate(calc(1.9 - var(--t) * 0.5)) brightness(calc(1.06 - var(--t) * 0.1));
 }
 

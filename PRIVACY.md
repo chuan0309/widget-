@@ -9,7 +9,10 @@ Glass Widgets is a personal desktop app for Windows that shows widgets (clock, w
 - **Pinterest data**: when the user signs in with Pinterest, the app reads the user's own boards and Pins (including secret boards, if the user allows it) only to display the Pin images in a desktop widget on that user's computer. The app does not create, edit, or delete anything on Pinterest.
 - **Pinterest access tokens and app credentials**: stored only on the user's computer, encrypted with the Windows Data Protection API. They are never sent anywhere except to Pinterest's own API.
 - **Bluetooth device names and battery levels**: read from Windows on the user's computer to show connection notifications and battery levels. This data never leaves the computer.
+- **Phone notifications (Phone Link widget)**: read from the Windows Notification Center on the user's computer (only notifications that came from the Phone Link app) to show them in a desktop widget. They never leave the computer.
 - **Weather**: the city's coordinates are sent to Open-Meteo (api.open-meteo.com) to get the forecast.
+- **Location (optional, on by default)**: to show local weather, the app asks the Windows location service for the computer's position. That position (or, if the location service is off, the computer's IP address) is sent to BigDataCloud (api.bigdatacloud.net) only to look up the city name. It can be turned off in the Weather page.
+- **Google Calendar (optional)**: when the user signs in with Google, the app reads the user's calendars (read-only) to show upcoming events on that user's desktop. Tokens are stored encrypted on the computer and are only sent to Google.
 
 ## What the app does not do
 
@@ -34,6 +37,9 @@ Glass Widgets 是一個在 Windows 桌面顯示小組件的個人程式，沒有
 - **Pinterest 資料**：登入後只會讀取使用者自己的圖版和 Pin，用來在使用者自己的電腦桌面上顯示圖片，不會新增、修改或刪除任何東西。
 - **登入資料**：只存在使用者的電腦上，並用 Windows 內建加密保護，只會傳給 Pinterest 官方 API。
 - **藍牙裝置名稱和電量**：只在使用者電腦上讀取，不會傳出去。
+- **手機通知（手機連結小組件）**：只讀取 Windows 通知中心裡「手機連結」轉過來的通知，顯示在桌面上，不會傳出去。
 - **天氣**：只會把城市座標傳給 Open-Meteo 取得天氣。
+- **自動定位**（可以關掉）：用 Windows 定位服務找電腦的位置（沒開的話用網路 IP），只傳給 BigDataCloud 查城市名稱。
+- **Google 日曆**（選用）：登入後只會讀取行事曆來顯示在桌面上，不會修改；登入資料加密存在電腦上，只會傳給 Google。
 - 不收集、不販賣、不分享任何個人資料；沒有廣告、追蹤或數據分析。
 - 在小組件按「登出」會刪除登入資料；也可以隨時到 Pinterest 帳號設定取消授權。

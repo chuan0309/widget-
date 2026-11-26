@@ -10,13 +10,15 @@
 #      Read through WinRT, at most once a minute per device.
 
 $ErrorActionPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# Background helper: never compete with the widgets' animations for the CPU
+[System.Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'BelowNormal'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)   # no BOM
 
 $KEY_CONNECTED = '{83DA6326-97A6-4088-9453-A1923F573B29} 15'
 $KEY_BATTERY   = '{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2'
 $KEY_COD       = '{2BD67D8B-8BEB-48D5-87E0-6CDA3428040A} 10'   # Bluetooth Class of Device
 
-$POLL_SECONDS = 3
+$POLL_SECONDS = 4
 $USB_HEADSETS = @('INZONE')   # name keywords of headsets that use their own USB receiver
 $GATT_EVERY_SECONDS = 120
 
@@ -140,6 +142,8 @@ while ($true) {
       # "Headphones (2- INZONE Buds)" -> "INZONE Buds"
       if ($name -match '\(([^()]*' + [regex]::Escape($k) + '[^()]*)\)') { $name = $Matches[1] }
       $name = ($name -replace '^\s*\d+\s*-\s*', '').Trim()
+      # Game and chat channels are two audio devices of the same headset: "INZONE Buds - Chat" -> "INZONE Buds"
+      $name = ($name -replace '\s*-\s*(Chat|Game|Voice)$', '').Trim()
       $id = 'USB-' + (($name -replace '[^A-Za-z0-9]', '').ToUpper())
       if (-not $devices.ContainsKey($id)) {
         $devices[$id] = [ordered]@{ id = $id; name = $name; connected = $true; battery = $null; cod = $null; le = $false }

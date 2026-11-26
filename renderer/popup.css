@@ -8,34 +8,36 @@ body {
   display: flex; justify-content: center; /* 瀏海貼著螢幕最上面、置中 */
 }
 
-/* ── 瀏海本體：上面平的貼著螢幕邊，下面兩個角是圓的 ── */
+/* ── 瀏海本體 ──
+   為了順：外框大小固定（打開時的大小），動畫只用 transform（縮放）和 opacity，
+   這兩種顯示卡可以直接處理，不用每一格都重新排版。 */
 .notch {
-  --w: 190px; --h: 32px; --r: 14px;
-  width: var(--w); height: var(--h);
-  border-radius: 0 0 var(--r) var(--r);
+  position: relative;
+  width: 400px; height: 76px;
+  cursor: pointer;
+}
+.notch-bg {
+  position: absolute; inset: 0;
+  border-radius: 0 0 30px 30px;
   corner-shape: superellipse(1.5);
   background: #000;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
-  overflow: hidden;
-  cursor: pointer;
-  transition:
-    width 0.5s cubic-bezier(0.32, 1.25, 0.45, 1),
-    height 0.5s cubic-bezier(0.32, 1.25, 0.45, 1),
-    border-radius 0.5s, box-shadow 0.4s;
+  transform-origin: 50% 0;
+  transform: scale(0.4, 0); /* 藏起來：縮到螢幕上緣 */
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0);
+  transition: transform 0.5s cubic-bezier(0.32, 1.25, 0.45, 1), box-shadow 0.4s;
+  will-change: transform;
 }
-.notch.open {
-  --w: 400px; --h: 76px; --r: 30px;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
-}
-/* 一開始完全看不到，從螢幕上緣「長」出來 */
-.notch.hidden { --h: 0px; --w: 160px; }
+.notch.pill .notch-bg { transform: scale(0.475, 0.42); }           /* 小瀏海 */
+.notch.open .notch-bg { transform: none; box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35); }
 
 .content {
+  position: relative;
   height: 76px;
   display: flex; align-items: center; gap: 12px;
   padding: 0 18px 0 14px;
   opacity: 0; transform: translateY(-6px) scale(0.96);
   transition: opacity 0.2s, transform 0.3s;
+  will-change: opacity, transform;
 }
 .notch.open .content { opacity: 1; transform: none; transition-delay: 0.15s; }
 

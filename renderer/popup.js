@@ -1,6 +1,5 @@
 const $ = (id) => document.getElementById(id);
 const notch = $("notch");
-notch.classList.add("hidden");
 
 const SHOW_MS = 4500; // 打開後停多久
 let closeTimer = null;
@@ -20,7 +19,7 @@ function render(device) {
 
 function open(device) {
   render(device);
-  notch.classList.remove("hidden");
+  notch.classList.add("pill");
   requestAnimationFrame(() => notch.classList.add("open"));
   clearTimeout(closeTimer);
   closeTimer = setTimeout(close, SHOW_MS);
@@ -30,7 +29,7 @@ function close() {
   clearTimeout(closeTimer);
   notch.classList.remove("open");
   // 先縮回小瀏海，再收進螢幕上緣，最後告訴主程式把視窗藏起來
-  setTimeout(() => notch.classList.add("hidden"), 380);
+  setTimeout(() => notch.classList.remove("pill"), 380);
   setTimeout(() => window.api.closePopup(), 900);
 }
 
