@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("api", {
   getState: () => ipcRenderer.invoke("get-state"),
   widgetMenu: () => ipcRenderer.send("widget:menu"),
+  onTint: (cb) => ipcRenderer.on("glass:tint", (_e, v) => cb(v)),
+  previewTint: (v) => ipcRenderer.send("glass:tint-preview", v),
   mgrOpen: (section) => ipcRenderer.send("mgr:open", section),
   mgrOpenUrl: (url) => ipcRenderer.send("mgr:open-url", url),
   onPaused: (cb) => ipcRenderer.on("widget:paused", (_e, p) => cb(p)),

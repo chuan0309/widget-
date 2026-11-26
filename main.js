@@ -12,6 +12,7 @@ const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
 const DEFAULTS = {
   // "ios"：大圓角＋模糊桌布（像 iPhone）；"acrylic"：Windows 11 內建毛玻璃（圓角比較小）
   glass: "ios",
+  tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
   widgets: { clock: true, weather: true, battery: true, calendar: true, pinterest: true },
   sizes: { clock: "s", weather: "s", battery: "m", calendar: "m", pinterest: "l" }, // s 小、m 中、l 大
   positions: {},
@@ -93,8 +94,16 @@ function glassOptions() {
 }
 
 function widgetQuery(kind) {
-  return { kind, size: sizeOf(kind), glass: settings.glass };
+  return { kind, size: sizeOf(kind), glass: settings.glass, tint: String(settings.tint) };
 }
+
+// 拖動透明度滑桿時，桌面上的小組件即時跟著變
+function setTint(value, save) {
+  settings.tint = Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
+  for (const w of Object.values(widgetWins)) if (!w.isDestroyed()) w.webContents.send("glass:tint", settings.tint);
+  if (save) saveSettings();
+}
+ipcMain.on("glass:tint-preview", (_e, v) => setTint(v, false));
 
 function createWidget(kind) {
   const saved = settings.positions[kind];
@@ -417,6 +426,7 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
     settings.city = { name: String(patch.city.name || "").slice(0, 40), lat: patch.city.lat, lon: patch.city.lon };
     widgetWins.weather?.webContents.reload(); // 天氣小組件重新讀
   }
+  if ("tint" in patch) setTint(patch.tint, false);
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
   if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
   saveSettings();

@@ -2,6 +2,10 @@ const params = new URLSearchParams(location.search);
 const kind = params.get("kind") || "clock";
 const size = ["s", "m", "l"].includes(params.get("size")) ? params.get("size") : "s";
 document.body.className = `glass-${params.get("glass") || "acrylic"} size-${size}`;
+// 透明程度（0–100），管理程式拖滑桿時會即時傳過來
+const setTintVar = (v) => document.body.style.setProperty("--t", String(Math.min(100, Math.max(0, Number(v))) / 100));
+setTintVar(params.get("tint") ?? 30);
+window.api.onTint?.(setTintVar);
 document.querySelector(`[data-kind="${kind}"]`).hidden = false;
 
 /* ───────── 圓角毛玻璃：模糊的桌布對準小組件的位置 ───────── */

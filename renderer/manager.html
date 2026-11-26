@@ -55,6 +55,18 @@
           <small>由 Windows 11 自己模糊後面的畫面，但圓角只能很小。</small>
         </button>
       </div>
+
+      <h2>透明程度</h2>
+      <div class="tint-preview" id="tintPreview">
+        <div class="tp-widget"><b>22°</b><small>台北市・晴時多雲</small></div>
+        <div class="tp-widget small"><span class="tp-ring"></span><small>100%</small></div>
+      </div>
+      <div class="group tint-row">
+        <span class="tint-icon clear" title="透明"><i></i><i></i></span>
+        <input type="range" id="tint" min="0" max="100" step="1" />
+        <span class="tint-icon tinted" title="不同色調"><i></i><i></i></span>
+      </div>
+      <p class="hint">往左「透明」會更透明，看得到更多桌布；往右「不同色調」會更不透明，字比較清楚。拖動時桌面上的小組件會馬上跟著變。</p>
     </section>
 
     <!-- 藍牙 -->

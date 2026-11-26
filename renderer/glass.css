@@ -30,7 +30,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* ── 模式一：Windows 11 毛玻璃（模糊由系統負責，這裡只加高光和反光）── */
 .glass-acrylic .card {
   border-radius: 8px; /* 跟 Windows 11 視窗圓角一樣 */
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 55%, rgba(255, 255, 255, 0.08));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 55%, rgba(255, 255, 255, 0.08)),
+    rgb(16 18 28 / calc(var(--t) * 0.55));
   box-shadow:
     inset 0 1.5px 1px rgba(255, 255, 255, 0.45),
     inset 0 -1px 1px rgba(255, 255, 255, 0.12),
@@ -40,12 +42,15 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* ── 模式二：圓角毛玻璃（像 iPhone）──
    後面那層 .backdrop 是「模糊過的桌布」，由程式對準小組件在螢幕上的位置。
    圓角用 superellipse，是蘋果那種「連續曲線」的圓角，不是一般的四分之一圓。 */
+/* --t 是透明程度：0 = 最透明（模糊少、幾乎不上色），1 = 顏色最深（模糊多、深色玻璃） */
+body { --t: 0.3; }
 .glass-ios .card {
   --r: 38px;
   border-radius: var(--r);
   corner-shape: superellipse(1.5);
   background: rgba(28, 30, 40, 0.55); /* 還沒拿到桌布時的底色 */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  /* 越透明，字的陰影越重，後面是亮的桌布也看得清楚 */
+  text-shadow: 0 1px 3px rgb(0 0 0 / calc(0.5 - var(--t) * 0.4));
 }
 .glass-ios .card.has-backdrop { background: transparent; }
 .glass-ios .card > .backdrop {
@@ -55,7 +60,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   pointer-events: none;
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  filter: blur(26px) saturate(1.8) brightness(1.04);
+  filter: blur(calc(10px + var(--t) * 26px)) saturate(calc(1.9 - var(--t) * 0.5)) brightness(calc(1.06 - var(--t) * 0.1));
 }
 
 /* 玻璃邊的漸層光（放在最上層） */
@@ -91,7 +96,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   background:
     radial-gradient(120% 70% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 60%, rgba(255, 255, 255, 0.08)),
-    rgba(12, 14, 22, 0.22);
+    rgb(16 18 28 / calc(0.04 + var(--t) * 0.66));
   box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.5), inset 0 -1px 1px rgba(255, 255, 255, 0.15);
 }
 
