@@ -78,6 +78,21 @@ jobs:
       - name: Build installer and portable exe
         run: npx electron-builder --win nsis portable --x64 --publish never
 
+      # 真的打開打包好的程式 15 秒，確認桌面上有畫出小組件（沒有的話不發佈）
+      - name: Smoke test the packaged app
+        shell: powershell
+        run: |
+          $log = Join-Path $env:APPDATA 'Glass Widgets\debug.log'
+          $p = Start-Process -FilePath 'dist\win-unpacked\Glass Widgets.exe' -PassThru
+          Start-Sleep 15
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process 'Glass Widgets' -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not (Test-Path $log)) { throw 'debug.log was not written' }
+          $text = Get-Content $log -Raw
+          Write-Host $text
+          if ($text -match 'host console 3') { throw 'the widget page has a script error' }
+          if ($text -notmatch '"cards":[1-9]') { throw 'no widgets were drawn' }
+
       - name: Upload for download
         uses: actions/upload-artifact@v4
         with:

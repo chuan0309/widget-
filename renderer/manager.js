@@ -541,11 +541,14 @@ $("locateNow").addEventListener("click", async () => {
 /* ───────── 一般 ───────── */
 function renderGeneral() {
   $("autostart").checked = state.autostart;
+  $("desktopLayer").checked = state.desktopLayer;
   $("dataFolder").textContent = state.dataFolder;
   $("version").textContent = state.version;
 }
 $("autostart").addEventListener("change", (e) =>
   save({ autostart: e.target.checked }, e.target.checked ? "開機時會自動啟動" : "已關閉自動啟動"));
+$("desktopLayer").addEventListener("change", (e) =>
+  save({ desktopLayer: e.target.checked }, e.target.checked ? "小組件放回桌面那一層" : "小組件不再固定在桌面那一層"));
 $("openFolder").addEventListener("click", () => window.api.mgrOpenFolder());
 $("quitApp").addEventListener("click", () => window.api.mgrQuit());
 

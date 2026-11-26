@@ -4,7 +4,7 @@
 // - 拖動只是在畫面裡移動，放開時自動對齊格子；不會再動到視窗本身
 // - 視窗平常點得穿，滑鼠移到小組件上時才接收滑鼠
 
-const api = window.api;
+// window.api 由 preload 提供（不能再用 const api 宣告一次，會整個檔案出錯）
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const SIZES = { s: [170, 170], m: [356, 170], l: [356, 356] };
 const CELL = 186;   // 170 + 16 間距
@@ -182,7 +182,28 @@ api.onHostLayout?.((items) => {
     try { instances.set(item.key, createInstance(item)); } catch (err) { console.error(item.key, err); }
   }
   for (const [key, inst] of instances) if (!keep.has(key)) { destroyInstance(inst); instances.delete(key); }
+  untangle();
 });
+
+// 有小組件疊在一起時（例如改了大小、舊版存的位置），把後面的推到最近的空格並記住
+function untangle() {
+  if (!hostRect.width) return;
+  const placed = [];
+  for (const inst of instances.values()) {
+    const [w, h] = SIZES[inst.size];
+    const hit = placed.some((o) => {
+      const [ow, oh] = SIZES[o.size];
+      return inst.x < o.x + ow && o.x < inst.x + w && inst.y < o.y + oh && o.y < inst.y + h;
+    });
+    if (hit) {
+      const spot = snapToGrid(inst, placed);
+      inst.x = spot.x; inst.y = spot.y;
+      placeInstance(inst);
+      api.hostMove(inst.key, spot.x, spot.y);
+    }
+    placed.push(inst);
+  }
+}
 
 /* ───────── 滑鼠：平常點得穿，在小組件上才接收 ───────── */
 let interactive = false;
@@ -245,14 +266,14 @@ function gridOrigin() {
     y: MARGIN,
   };
 }
-function snapToGrid(inst) {
+function snapToGrid(inst, others = [...instances.values()]) {
   const [w, h] = SIZES[inst.size];
   const o = gridOrigin();
   const maxCol = Math.floor((hostRect.width - w - o.x) / CELL);
   const maxRow = Math.floor((hostRect.height - h - o.y) / CELL);
   const col0 = Math.round((inst.x - o.x) / CELL), row0 = Math.round((inst.y - o.y) / CELL);
   const rect = (c, r) => ({ x: o.x + c * CELL, y: o.y + r * CELL, w, h });
-  const overlaps = (a) => [...instances.values()].some((other) => {
+  const overlaps = (a) => others.some((other) => {
     if (other === inst) return false;
     const [ow, oh] = SIZES[other.size];
     return a.x < other.x + ow && other.x < a.x + a.w && a.y < other.y + oh && other.y < a.y + a.h;

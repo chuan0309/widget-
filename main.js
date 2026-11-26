@@ -35,6 +35,18 @@ const OAUTH = loadOAuthConfig();
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
+
+// 診斷記錄：小組件視窗每一步的狀態寫在設定資料夾的 debug.log（每次啟動重新開始，最多 200 KB）
+const DEBUG_LOG = path.join(app.getPath("userData"), "debug.log");
+try { fs.mkdirSync(path.dirname(DEBUG_LOG), { recursive: true }); fs.writeFileSync(DEBUG_LOG, ""); } catch {}
+function log(...args) {
+  try {
+    if (fs.statSync(DEBUG_LOG).size > 200 * 1024) return;
+    const line = args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ");
+    fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${line}\n`);
+  } catch {}
+}
+log("start", { version: app.getVersion(), os: os.release(), electron: process.versions.electron });
 const DEFAULTS = {
   glass: "ios", // 大圓角＋模糊桌布（像 iPhone）
   tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
@@ -49,6 +61,7 @@ const DEFAULTS = {
   calendar: { sources: [] }, // Google 日曆的 iCal 私人網址（加密存）
   batteryWidget: { hidden: {}, order: [] }, // 電量小組件：哪些裝置不要顯示、排列順序
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
+  desktopLayer: true, // 小組件固定在桌面那一層（其他視窗永遠蓋在上面）
   stacks: [], // 疊放：[{ id, items: ["clock", "weather"], size: "s", rotate: false }]
 };
 const FIRST_RUN = !fs.existsSync(SETTINGS_FILE);
@@ -186,14 +199,34 @@ function createHost() {
   });
   // 平常整個視窗點得穿；滑鼠移到小組件上時，畫面會請主程式暫時接收滑鼠
   hostWin.setIgnoreMouseEvents(true, { forward: true });
+  log("host created", { area: hostArea, scale: screen.getPrimaryDisplay().scaleFactor, displays: screen.getAllDisplays().length });
   hostWin.loadFile(path.join(__dirname, "renderer", "host.html"));
-  hostWin.webContents.on("did-finish-load", sendHostInit);
-  hostWin.once("ready-to-show", () => { hostWin.showInactive(); pinToDesktop(hostWin); });
+  hostWin.webContents.on("did-finish-load", () => { log("host loaded"); sendHostInit(); });
+  hostWin.webContents.on("did-fail-load", (_e, code, desc) => log("host load failed", code, desc));
+  hostWin.webContents.on("console-message", (_e, level, message, line, source) => {
+    if (level >= 1) log("host console", level, message, `${path.basename(String(source))}:${line}`);
+  });
+  const show = (why) => {
+    if (!hostWin || hostWin.isDestroyed() || hostWin.isVisible()) return;
+    log("host show", why);
+    hostWin.showInactive();
+    pinToDesktop(hostWin);
+  };
+  hostWin.once("ready-to-show", () => show("ready-to-show"));
+  setTimeout(() => show("fallback after 4 s"), 4000); // 萬一 ready-to-show 沒來
+  setTimeout(() => {
+    if (!hostWin || hostWin.isDestroyed()) return log("host gone after 8 s");
+    log("host state after 8 s", { visible: hostWin.isVisible(), bounds: hostWin.getBounds(), minimized: hostWin.isMinimized(), widgets: layoutItems().length });
+    hostWin.webContents.executeJavaScript("({ cards: document.querySelectorAll('.card').length, api: typeof window.api, size: [innerWidth, innerHeight], visibility: document.visibilityState })")
+      .then((r) => log("host page", r)).catch((err) => log("host page check failed", String(err)));
+  }, 8000);
   // 點過小組件之後視窗會跑到最上面，點別的地方時就放回桌面那一層
   hostWin.on("blur", () => { hostWin.setIgnoreMouseEvents(true, { forward: true }); pinToDesktop(hostWin); });
-  hostWin.on("closed", () => (hostWin = null));
+  const win = hostWin;
+  win.on("closed", () => { if (hostWin === win) hostWin = null; });
   // 畫面程式萬一當掉，自動重開，不會讓小組件整個消失
-  hostWin.webContents.on("render-process-gone", () => {
+  hostWin.webContents.on("render-process-gone", (_e, d) => {
+    log("host renderer gone", d);
     if (app.isQuitting) return;
     hostWin?.destroy();
     setTimeout(createHost, 1000);
@@ -264,7 +297,8 @@ ipcMain.on("widget:menu", (e, key) => {
 /* ───────── 小組件固定在「桌面那一層」───────── */
 // Chrome 之類的視窗永遠蓋在小組件上面；按 Win+D 也不會把小組件藏起來
 function pinToDesktop(win) {
-  if (process.platform !== "win32" || !win || win.isDestroyed()) return;
+  if (process.platform !== "win32" || !win || win.isDestroyed() || settings.desktopLayer === false) return;
+  if (!pinToDesktop.logged) { pinToDesktop.logged = true; log("pin to desktop", { helper: !!helper }); }
   const handle = win.getNativeWindowHandle();
   const hwnd = handle.length >= 8 ? handle.readBigUInt64LE(0) : BigInt(handle.readUInt32LE(0));
   helperSend(`pin ${hwnd}`);
@@ -397,12 +431,15 @@ function startHelper() {
       let data;
       try { data = JSON.parse(line.slice(sp + 1)); } catch { continue; }
       const kind = line.slice(0, sp);
+      if (!reported.has(kind)) { reported.add(kind); log("helper first", kind, Array.isArray(data) ? data.length : "?"); }
       if (kind === "bt" && Array.isArray(data)) handleDevices(data);
       else if (kind === "audio" && Array.isArray(data)) handleAudio(data);
     }
   });
-  helper.stderr.on("data", (d) => console.error("[helper]", String(d)));
-  helper.on("exit", () => {
+  helper.stderr.on("data", (d) => log("helper stderr", String(d).slice(0, 500)));
+  let reported = new Set();
+  helper.on("exit", (code) => {
+    log("helper exit", code);
     helper = null;
     if (!app.isQuitting) setTimeout(() => { startHelper(); if (hostWin) pinToDesktop(hostWin); }, 5000); // 掛掉就重開
   });
@@ -571,6 +608,7 @@ function managerState() {
     calendars: (settings.calendar.sources || []).map((c, i) => ({ name: c.name || `行事曆 ${i + 1}`, color: c.color })),
     devices,
     autostart: app.getLoginItemSettings().openAtLogin,
+    desktopLayer: settings.desktopLayer !== false,
     locate: locateInfo,
     version: app.getVersion(),
     isWin11: IS_WIN11,
@@ -628,6 +666,13 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
   if ("autostart" in patch) app.setLoginItemSettings({ openAtLogin: !!patch.autostart });
+  if ("desktopLayer" in patch) {
+    settings.desktopLayer = !!patch.desktopLayer;
+    log("desktopLayer", settings.desktopLayer);
+    // 換設定時重開小組件視窗，才能把「固定在桌面」的效果拿掉或加回來
+    if (hostWin && !hostWin.isDestroyed()) hostWin.destroy();
+    createHost();
+  }
   saveSettings();
   return managerState();
 });
