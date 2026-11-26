@@ -1,0 +1,144 @@
+:root {
+  --ink: #fff;
+  --ink-soft: rgba(255, 255, 255, 0.7);
+  --accent: #0a84ff;
+  --ok: #30d158;
+  --ease-spring: cubic-bezier(0.32, 1.4, 0.4, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; -webkit-app-region: no-drag; }
+
+/* 整個視窗就是一塊玻璃，按住任何地方都能拖動 */
+.card {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+/* ── 模式一：Windows 11 毛玻璃（模糊由系統負責，這裡只加高光和反光）── */
+.glass-acrylic .card {
+  border-radius: 8px; /* 跟 Windows 11 視窗圓角一樣 */
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 55%, rgba(255, 255, 255, 0.08)),
+    rgb(16 18 28 / calc(var(--t) * 0.55));
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 24px rgba(255, 255, 255, 0.06);
+}
+
+/* ── 模式二：圓角毛玻璃（像 iPhone）──
+   後面那層 .backdrop 是「模糊過的桌布」，由程式對準小組件在螢幕上的位置。
+   圓角用 superellipse，是蘋果那種「連續曲線」的圓角，不是一般的四分之一圓。 */
+/* --t 是透明程度：0 = 最透明（模糊少、幾乎不上色），1 = 顏色最深（模糊多、深色玻璃） */
+body { --t: 0.3; }
+.glass-ios .card {
+  --r: 38px;
+  border-radius: var(--r);
+  corner-shape: superellipse(1.5);
+  background: rgba(28, 30, 40, 0.55); /* 還沒拿到桌布時的底色 */
+  /* 越透明，字的陰影越重，後面是亮的桌布也看得清楚 */
+  text-shadow: 0 1px 3px rgb(0 0 0 / calc(0.5 - var(--t) * 0.4));
+}
+.glass-ios .card.has-backdrop { background: transparent; }
+.glass-ios .card > .backdrop {
+  -webkit-app-region: none;
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  filter: blur(calc(10px + var(--t) * 26px)) saturate(calc(1.9 - var(--t) * 0.5)) brightness(calc(1.06 - var(--t) * 0.1));
+}
+
+/* 玻璃邊的漸層光（放在最上層） */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* 不能蓋在按鈕上面：Windows 會把這層當成「拖動視窗」的區域，按鈕就點不到了 */
+  z-index: 1;
+  -webkit-app-region: none;
+  border-radius: inherit;
+  corner-shape: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg,
+    rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.08) 35%,
+    rgba(255, 255, 255, 0.04) 65%, rgba(255, 255, 255, 0.45));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+/* 玻璃本身的顏色＋左上角的柔光（在桌布上面、文字下面） */
+.card::after {
+  content: "";
+  -webkit-app-region: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: radial-gradient(120% 70% at 20% 0%, rgba(255, 255, 255, 0.18), transparent 55%);
+  pointer-events: none;
+}
+.glass-ios .card::after {
+  background:
+    radial-gradient(120% 70% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 60%, rgba(255, 255, 255, 0.08)),
+    rgb(16 18 28 / calc(0.04 + var(--t) * 0.66));
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.5), inset 0 -1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.card > * { position: relative; z-index: 1; }
+
+/* 打開時的彈出動畫 */
+.card { animation: rise 0.6s var(--ease-spring) both; }
+@keyframes rise {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 電量圓環（widget 跟通知共用）*/
+@property --p { syntax: "<number>"; inherits: true; initial-value: 0; }
+.ring {
+  --p: 0;
+  --size: 58px;
+  --ring-color: var(--ok);
+  width: var(--size); height: var(--size);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  position: relative;
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: --p 1s;
+}
+.ring::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(var(--ring-color) calc(var(--p) * 1%), rgba(255, 255, 255, 0.2) 0);
+  -webkit-mask: radial-gradient(closest-side, transparent 80%, #000 82%);
+}
+.ring.low { --ring-color: #ff453a; }
+.ring.unknown { --ring-color: rgba(255, 255, 255, 0.45); }
+.ring svg:not(.ms) {
+  width: calc(var(--size) * 0.4); height: calc(var(--size) * 0.4);
+  fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Material Symbols 圖示：實心白色 */
+svg.ms { fill: #fff; stroke: none; }
+.ring svg.ms { width: calc(var(--size) * 0.46); height: calc(var(--size) * 0.46); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

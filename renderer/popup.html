@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>藍牙通知</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- MacBook 瀏海：平常是一小條黑色，有通知時往下長大 -->
+  <div class="notch" id="notch">
+    <div class="content">
+      <span class="dev" id="dev"></span>
+      <span class="text">
+        <b id="name"></b>
+        <small id="sub">已連線</small>
+      </span>
+      <span class="batt" id="batt"></span>
+    </div>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="devices.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

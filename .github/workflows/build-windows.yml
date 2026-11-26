@@ -1,0 +1,49 @@
+# 在 GitHub 的 Windows 電腦上把程式打包成 .exe
+#
+# - 推到 main：版本號自動變成 1.0.<第幾次打包>，並發佈到 Releases。
+#   已經安裝的 Glass Widgets 會從 Releases 自動下載新版、關掉程式時自動更新。
+# - 推到其他分支：只打包，在 Actions 頁面這次執行的「Artifacts」可以下載測試，不會發佈。
+name: Build Windows app
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Set version
+        shell: bash
+        run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+
+      - name: Build (test build, not published)
+        if: github.ref != 'refs/heads/main'
+        run: npx electron-builder --win nsis portable --x64 --publish never
+
+      - name: Build and publish release (main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis portable --x64 --publish always
+
+      - name: Upload for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Glass-Widgets-Windows
+          path: dist/*.exe
+          if-no-files-found: error

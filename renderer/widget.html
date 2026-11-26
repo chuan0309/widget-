@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com; img-src 'self' data: https://i.pinimg.com" />
+  <title>Glass Widget</title>
+  <link rel="stylesheet" href="glass.css" />
+  <link rel="stylesheet" href="widget.css" />
+</head>
+<body>
+  <!-- 時鐘（小：指針＋日期；中：指針＋數字時間；大：大指針＋數字時間） -->
+  <div class="card clock" data-kind="clock" hidden>
+    <div class="analog">
+      <i class="hand h" id="hHand"></i>
+      <i class="hand m" id="mHand"></i>
+      <i class="hand s" id="sHand"></i>
+      <i class="pin"></i>
+    </div>
+    <div class="clock-info">
+      <div class="digital" id="digital"></div>
+      <div class="clock-meta"><span id="dateWeek"></span><b id="dateDay"></b></div>
+      <div class="clock-date" id="dateFull"></div>
+      <div class="lunar" id="lunar"></div>
+    </div>
+  </div>
+
+  <!-- 天氣（內容依大小由程式產生） -->
+  <div class="card weather" data-kind="weather" hidden><div class="wt" id="wt"></div></div>
+
+  <!-- 電量：已連線的藍牙裝置（筆電會多顯示自己的電池） -->
+  <div class="card battery" data-kind="battery" hidden>
+    <div class="batt" id="batt"></div>
+    <div class="dots" id="battDots"></div>
+  </div>
+
+  <!-- Google 日曆 -->
+  <div class="card calendar" data-kind="calendar" hidden><div class="cal" id="cal"></div></div>
+
+  <!-- Pinterest -->
+  <div class="card pinterest" data-kind="pinterest" hidden>
+    <header class="pn-head">
+      <span class="pn-badge" id="pnBadge"></span>
+      <b id="pnTitle">Pinterest</b>
+      <button class="pn-gear" id="pnGear" aria-label="換圖版" title="換圖版"></button>
+    </header>
+
+    <div class="pn-wall" id="pnWall">
+      <div class="pn-col" id="pnColA"></div>
+      <div class="pn-col" id="pnColB"></div>
+      <div class="pn-col" id="pnColC"></div>
+    </div>
+
+    <!-- 設定面板：好幾個畫面輪流顯示 -->
+    <div class="pn-setup" id="pnSetup" hidden>
+      <!-- 選擇方式 -->
+      <div class="pn-view" data-view="choice">
+        <p>要顯示哪裡的圖？</p>
+        <button class="pn-btn" data-go="login">登入我的 Pinterest</button>
+        <button class="pn-btn ghost" data-go="rss">用公開網址</button>
+      </div>
+
+      <!-- 公開網址 -->
+      <form class="pn-view" data-view="rss" id="pnRssForm">
+        <p>貼上 Pinterest 網址</p>
+        <small>個人頁或某個圖版都可以（要公開的）</small>
+        <input id="pnInput" placeholder="pinterest.com/帳號/圖版" spellcheck="false" />
+        <span class="pn-error" data-error></span>
+        <button class="pn-btn" type="submit">完成</button>
+        <button class="pn-link" type="button" data-go="choice">← 返回</button>
+      </form>
+
+      <!-- 官方 API 登入 -->
+      <form class="pn-view" data-view="login" id="pnLoginForm">
+        <p>登入 Pinterest</p>
+        <small>填你在 developers.pinterest.com 建的 App 資料</small>
+        <input id="pnAppId" placeholder="App ID" spellcheck="false" inputmode="numeric" />
+        <input id="pnSecret" placeholder="App secret" type="password" spellcheck="false" />
+        <small class="pn-hint">App 的 Redirect URI 要填 <code id="pnRedirect">http://localhost:8085/</code></small>
+        <span class="pn-error" data-error></span>
+        <button class="pn-btn" type="submit">到瀏覽器登入</button>
+        <button class="pn-link" type="button" data-go="choice">← 返回</button>
+      </form>
+
+      <!-- 等瀏覽器 -->
+      <div class="pn-view" data-view="wait">
+        <span class="pn-spinner"></span>
+        <p>請在瀏覽器按「允許」</p>
+        <small>完成後會自動回到這裡</small>
+        <button class="pn-link" type="button" data-go="login">取消</button>
+      </div>
+
+      <!-- 選圖版 -->
+      <div class="pn-view boards" data-view="boards">
+        <div class="pn-boards-head"><p>選一個圖版</p><small id="pnUser"></small></div>
+        <div class="pn-boards" id="pnBoards"></div>
+        <span class="pn-error" data-error></span>
+        <button class="pn-link" type="button" id="pnLogout">登出</button>
+      </div>
+    </div>
+
+    <div class="pn-msg" id="pnMsg" hidden></div>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="devices.js"></script>
+  <script src="widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://i.pinimg.com; connect-src https://geocoding-api.open-meteo.com" />
+  <title>Glass Widgets</title>
+  <link rel="stylesheet" href="manager.css" />
+</head>
+<body>
+  <div class="titlebar"></div>
+
+  <aside class="side">
+    <div class="brand">
+      <span class="brand-icon" data-icon="widgets"></span>
+      <div><b>Glass Widgets</b><small>桌面小組件</small></div>
+    </div>
+    <nav id="nav">
+      <button data-go="widgets"><span data-icon="widgets"></span>小組件</button>
+      <button data-go="look"><span data-icon="palette"></span>外觀</button>
+      <button data-go="bluetooth"><span data-icon="other"></span>藍牙通知</button>
+      <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
+      <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
+      <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
+      <button data-go="general"><span data-icon="settings"></span>一般</button>
+    </nav>
+  </aside>
+
+  <main id="main">
+    <!-- 小組件 -->
+    <section data-section="widgets">
+      <h1>小組件</h1>
+      <p class="lead">選要放在桌面上的小組件和大小。按住小組件就能拖到任何位置；在小組件上按右鍵也能改大小。</p>
+      <div class="widget-grid" id="widgetGrid"></div>
+      <div class="actions">
+        <button class="btn" id="showWidgets"><span data-icon="visibility"></span>把小組件叫回來</button>
+        <button class="btn ghost" id="resetPos"><span data-icon="restart_alt"></span>重設位置</button>
+      </div>
+      <p class="hint">按 Win + D 顯示桌面時，小組件會跟著被藏起來，按「把小組件叫回來」就好。</p>
+    </section>
+
+    <!-- 外觀 -->
+    <section data-section="look">
+      <h1>外觀</h1>
+      <p class="lead">小組件的玻璃效果。</p>
+      <div class="look-grid">
+        <button class="look-card" data-glass="ios">
+          <span class="look-preview ios"><i></i><i></i><i class="wide"></i></span>
+          <b>圓角毛玻璃 <em>推薦</em></b>
+          <small>蘋果那種大圓角，玻璃後面是模糊的桌布。</small>
+        </button>
+        <button class="look-card" data-glass="acrylic">
+          <span class="look-preview acrylic"><i></i><i></i><i class="wide"></i></span>
+          <b>Windows 毛玻璃</b>
+          <small>由 Windows 11 自己模糊後面的畫面，但圓角只能很小。</small>
+        </button>
+      </div>
+
+      <h2>透明程度</h2>
+      <div class="tint-preview" id="tintPreview">
+        <div class="tp-widget"><b>22°</b><small>台北市・晴時多雲</small></div>
+        <div class="tp-widget small"><span class="tp-ring"></span><small>100%</small></div>
+      </div>
+      <div class="group tint-row">
+        <span class="tint-icon clear" title="透明"><i></i><i></i></span>
+        <input type="range" id="tint" min="0" max="100" step="1" />
+        <span class="tint-icon tinted" title="不同色調"><i></i><i></i></span>
+      </div>
+      <p class="hint">往左「透明」會更透明，看得到更多桌布；往右「不同色調」會更不透明，字比較清楚。拖動時桌面上的小組件會馬上跟著變。</p>
+    </section>
+
+    <!-- 藍牙 -->
+    <section data-section="bluetooth">
+      <h1>藍牙通知</h1>
+      <p class="lead">藍牙裝置連上電腦、或電量變低時，右下角會跳出通知。</p>
+      <div class="group">
+        <label class="row">
+          <span class="row-text"><b>連線時跳出通知</b><small>耳機、滑鼠、鍵盤、手把等連上電腦時</small></span>
+          <input type="checkbox" class="switch" id="btConnect" />
+        </label>
+        <label class="row">
+          <span class="row-text"><b>電量低時提醒</b><small>每台裝置只提醒一次，充電後才會再提醒</small></span>
+          <input type="checkbox" class="switch" id="btLow" />
+        </label>
+        <div class="row">
+          <span class="row-text"><b>低電量門檻</b><small>電量低於這個數字就提醒</small></span>
+          <span class="range"><input type="range" id="btThreshold" min="5" max="50" step="5" /><output id="btThresholdOut"></output></span>
+        </div>
+        <div class="row">
+          <span class="row-text"><b>測試通知</b><small>看看通知長什麼樣子</small></span>
+          <button class="btn small" id="btTest">顯示</button>
+        </div>
+      </div>
+
+      <h2>已配對的裝置</h2>
+      <div class="group" id="deviceList"></div>
+      <p class="hint">關掉某台裝置的開關，那台就不會跳通知（電量小組件還是會顯示）。</p>
+    </section>
+
+    <!-- Google 日曆 -->
+    <section data-section="calendar">
+      <h1>Google 日曆</h1>
+      <p class="lead">把 Google 日曆的行程顯示在桌面上。不用登入，貼上行事曆的「私人網址」就好。</p>
+
+      <h2>已加入的行事曆</h2>
+      <div class="group" id="calList"></div>
+
+      <h2>加入行事曆</h2>
+      <div class="group">
+        <div class="row">
+          <input class="grow" id="calUrl" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics" spellcheck="false" />
+          <button class="btn small" id="calAdd">加入</button>
+        </div>
+      </div>
+      <p class="hint err" id="calErr"></p>
+
+      <h2>網址去哪裡找？（在電腦上做）</h2>
+      <div class="group steps">
+        <div class="row"><span class="num">1</span><span class="row-text"><b>打開 Google 日曆網頁版</b><small>calendar.google.com</small></span>
+          <button class="btn small ghost" id="calOpenGoogle"><span data-icon="open_in_new"></span>打開</button></div>
+        <div class="row"><span class="num">2</span><span class="row-text"><b>左邊「我的日曆」→ 滑到你的日曆上 → 按「⋮」→「設定和共用」</b></span></div>
+        <div class="row"><span class="num">3</span><span class="row-text"><b>往下滑到「整合日曆」</b><small>不是「公開網址」，是下面那個</small></span></div>
+        <div class="row"><span class="num">4</span><span class="row-text"><b>複製「iCal 格式的私人網址」，貼到上面</b><small>有好幾個日曆就一個一個加</small></span></div>
+      </div>
+      <p class="hint">這個網址等於你行事曆的鑰匙，不要給別人；程式會用 Windows 的加密存起來。行程每 15 分鐘更新一次。</p>
+    </section>
+
+    <!-- Pinterest -->
+    <section data-section="pinterest">
+      <h1>Pinterest</h1>
+      <p class="lead">Pinterest 小組件要顯示哪裡的圖。</p>
+
+      <div class="group" id="pnStatus"></div>
+
+      <div id="pnBoardsWrap" hidden>
+        <h2>選擇圖版</h2>
+        <div class="group board-list" id="pnBoards"></div>
+      </div>
+
+      <div id="pnLoginWrap">
+        <h2>登入帳號（官方 API）</h2>
+        <div class="group">
+          <div class="row stack">
+            <span class="row-text"><b>App ID 和 App secret</b><small>在 developers.pinterest.com →「我的應用程式」裡</small></span>
+            <div class="fields">
+              <input id="pnAppId" placeholder="App ID" inputmode="numeric" spellcheck="false" />
+              <input id="pnSecret" placeholder="App secret" type="password" spellcheck="false" />
+            </div>
+          </div>
+          <div class="row">
+            <span class="row-text"><b>重新導向 URI</b><small>要加在 Pinterest App 設定裡，一字不差</small></span>
+            <span class="copy"><code id="pnRedirect">http://localhost:8085/</code>
+              <button class="btn small ghost" id="pnCopy"><span data-icon="content_copy"></span>複製</button></span>
+          </div>
+          <div class="row">
+            <span class="row-text"><b id="pnLoginMsg">按下後會打開瀏覽器，按「允許」就完成</b><small class="err" id="pnLoginErr"></small></span>
+            <button class="btn small" id="pnLogin"><span data-icon="login"></span>到瀏覽器登入</button>
+          </div>
+        </div>
+      </div>
+
+      <h2>或用公開網址（不用登入）</h2>
+      <div class="group">
+        <div class="row">
+          <input class="grow" id="pnUrl" placeholder="pinterest.com/你的帳號/圖版名稱" spellcheck="false" />
+          <button class="btn small" id="pnUrlSave">套用</button>
+        </div>
+      </div>
+      <p class="hint err" id="pnUrlErr"></p>
+    </section>
+
+    <!-- 天氣 -->
+    <section data-section="weather">
+      <h1>天氣</h1>
+      <p class="lead">天氣小組件顯示的城市。</p>
+      <div class="group">
+        <div class="row">
+          <span class="row-icon" data-icon="location_on"></span>
+          <span class="row-text"><b id="cityName"></b><small id="cityCoord"></small></span>
+        </div>
+      </div>
+      <h2>換城市</h2>
+      <div class="group">
+        <form class="row" id="citySearch">
+          <input class="grow" id="cityInput" placeholder="輸入城市名稱，例如：台中、東京、Seoul" spellcheck="false" />
+          <button class="btn small" type="submit"><span data-icon="search"></span>搜尋</button>
+        </form>
+      </div>
+      <div class="group" id="cityResults" hidden></div>
+      <p class="hint">天氣資料來自 Open-Meteo（免費、不用註冊）。</p>
+    </section>
+
+    <!-- 一般 -->
+    <section data-section="general">
+      <h1>一般</h1>
+      <div class="group">
+        <label class="row">
+          <span class="row-text"><b>開機自動啟動</b><small>開電腦後小組件自動出現在桌面</small></span>
+          <input type="checkbox" class="switch" id="autostart" />
+        </label>
+        <div class="row">
+          <span class="row-text"><b>設定資料夾</b><small id="dataFolder"></small></span>
+          <button class="btn small ghost" id="openFolder"><span data-icon="folder_open"></span>打開</button>
+        </div>
+        <div class="row">
+          <span class="row-icon blue" data-icon="refresh"></span>
+          <span class="row-text"><b>版本 <span id="version"></span></b><small id="updateMsg">會自動檢查更新</small></span>
+          <button class="btn small ghost" id="updateBtn">檢查更新</button>
+        </div>
+      </div>
+      <p class="hint">關掉這個視窗不會關掉小組件，程式會留在右下角的系統匣。點系統匣的圖示可以再打開這個視窗。</p>
+      <div class="actions">
+        <button class="btn danger" id="quitApp"><span data-icon="power_settings_new"></span>完全離開程式</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="icons.js"></script>
+  <script src="devices.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>
