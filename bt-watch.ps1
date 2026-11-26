@@ -140,6 +140,8 @@ while ($true) {
       # "Headphones (2- INZONE Buds)" -> "INZONE Buds"
       if ($name -match '\(([^()]*' + [regex]::Escape($k) + '[^()]*)\)') { $name = $Matches[1] }
       $name = ($name -replace '^\s*\d+\s*-\s*', '').Trim()
+      # Game and chat channels are two audio devices of the same headset: "INZONE Buds - Chat" -> "INZONE Buds"
+      $name = ($name -replace '\s*-\s*(Chat|Game|Voice)$', '').Trim()
       $id = 'USB-' + (($name -replace '[^A-Za-z0-9]', '').ToUpper())
       if (-not $devices.ContainsKey($id)) {
         $devices[$id] = [ordered]@{ id = $id; name = $name; connected = $true; battery = $null; cod = $null; le = $false }

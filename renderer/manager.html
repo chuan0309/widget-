@@ -19,6 +19,7 @@
       <button data-go="widgets"><span data-icon="widgets"></span>小組件</button>
       <button data-go="look"><span data-icon="palette"></span>外觀</button>
       <button data-go="bluetooth"><span data-icon="other"></span>藍牙通知</button>
+      <button data-go="audio"><span data-icon="speaker"></span>音訊輸出</button>
       <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
       <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
       <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
@@ -36,7 +37,13 @@
         <button class="btn" id="showWidgets"><span data-icon="visibility"></span>把小組件叫回來</button>
         <button class="btn ghost" id="resetPos"><span data-icon="restart_alt"></span>重設位置</button>
       </div>
-      <p class="hint">按 Win + D 顯示桌面時，小組件會跟著被藏起來，按「把小組件叫回來」就好。</p>
+
+
+      <h2>疊放（好幾個小組件疊在同一格，用滑鼠滾輪上下換）</h2>
+      <div id="stackList"></div>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn ghost" id="addStack"><span data-icon="widgets"></span>新增疊放</button>
+      </div>
     </section>
 
     <!-- 外觀 -->
@@ -72,7 +79,7 @@
     <!-- 藍牙 -->
     <section data-section="bluetooth">
       <h1>藍牙通知</h1>
-      <p class="lead">藍牙裝置連上電腦、或電量變低時，右下角會跳出通知。</p>
+      <p class="lead">藍牙裝置連上電腦、或電量變低時，螢幕正上方會跳出瀏海通知。</p>
       <div class="group">
         <label class="row">
           <span class="row-text"><b>連線時跳出通知</b><small>耳機、滑鼠、鍵盤、手把等連上電腦時</small></span>
@@ -95,6 +102,31 @@
       <h2>已配對的裝置</h2>
       <div class="group" id="deviceList"></div>
       <p class="hint">關掉某台裝置的開關，那台就不會跳通知（電量小組件還是會顯示）。</p>
+
+      <h2>電量小組件要顯示的裝置</h2>
+      <div class="group" id="battList"></div>
+      <p class="hint">開關決定要不要顯示在電量小組件；用 ↑ ↓ 排順序（沒連線的裝置不會出現在小組件上）。</p>
+    </section>
+
+    <!-- 音訊輸出 -->
+    <section data-section="audio">
+      <h1>音訊輸出</h1>
+      <p class="lead">聲音要從哪裡出來。點一下就切換，也可以讓它戴上耳機時自動切換。</p>
+
+      <h2>現在可以用的輸出</h2>
+      <div class="group" id="auNow"></div>
+
+      <h2>自動切換</h2>
+      <div class="group">
+        <label class="row">
+          <span class="row-text"><b>裝置接上或拔掉時自動切換</b>
+            <small>例如：耳機連上 → 切到耳機；耳機拔掉 → 切回喇叭</small></span>
+          <input type="checkbox" class="switch" id="auAuto" />
+        </label>
+      </div>
+      <h2>優先順序（上面的優先）</h2>
+      <div class="group" id="auPriority"></div>
+      <p class="hint">有裝置接上或拔掉時，會切到「目前接著的裝置裡，排最上面的那個」。你自己手動切的，在下一次有裝置接上或拔掉之前都不會被改回去。</p>
     </section>
 
     <!-- Google 日曆 -->

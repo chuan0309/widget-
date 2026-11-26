@@ -310,3 +310,33 @@ details.adv > summary::before { content: "▸"; display: inline-block; width: 16
 details.adv[open] > summary::before { transform: rotate(90deg); }
 details.adv > summary:hover { color: #fff; }
 button.link { color: var(--accent); font-size: 12px; text-decoration: underline; }
+
+/* 上下移動的小按鈕 */
+.move { display: inline-flex; gap: 2px; }
+.move button {
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08); color: var(--ink-soft); font-size: 13px;
+}
+.move button:hover:not([disabled]) { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.move button[disabled] { opacity: 0.3; cursor: default; }
+
+/* 疊放編輯 */
+.stack-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.stack-card + .stack-card { margin-top: 12px; }
+.stack-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.stack-top b { flex: 1; min-width: 120px; }
+.stack-items { display: flex; flex-direction: column; gap: 6px; }
+.stack-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.06);
+}
+.stack-item .row-icon { width: 28px; height: 28px; border-radius: 8px; }
+.stack-item .row-icon svg { width: 16px; height: 16px; }
+.stack-item span.name { flex: 1; font-weight: 600; }
+.stack-bottom { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stack-bottom select {
+  height: 32px; border-radius: 8px; border: 0; padding: 0 10px; color: #fff;
+  background: rgba(0, 0, 0, 0.25); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); font: inherit; font-size: 13px;
+}
+.stack-bottom label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); margin-left: auto; }
+.stack-bottom .switch { transform: scale(0.85); }

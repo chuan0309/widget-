@@ -35,6 +35,7 @@ function go(section) {
   document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.dataset.section === section));
   if (section === "pinterest") loadPinterest();
   if (section === "calendar") { renderCalendars(); loadGoogle(); }
+  if (section === "audio") loadAudio();
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 window.api.onGoto((section) => go(section));
@@ -44,12 +45,14 @@ const WIDGET_INFO = [
   { kind: "clock", name: "時鐘", icon: "schedule" },
   { kind: "weather", name: "天氣", icon: "partly_cloudy" },
   { kind: "battery", name: "電量", icon: "buds" },
+  { kind: "audio", name: "音訊輸出", icon: "speaker" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
   { kind: "pinterest", name: "Pinterest", icon: "pin" },
 ];
 const SIZE_NAMES = { s: "小", m: "中", l: "大" };
 
 function renderWidgets() {
+  renderStacks();
   $("widgetGrid").replaceChildren(...WIDGET_INFO.map((w) => {
     const on = !!state.settings.widgets[w.kind];
     const cur = state.settings.sizes?.[w.kind] || "s";
@@ -69,6 +72,56 @@ function renderWidgets() {
     return card;
   }));
 }
+/* 疊放 */
+function saveStacks(stacks, msg) { return save({ stacks }, msg); }
+function renderStacks() {
+  const stacks = (state.settings.stacks || []).map((st) => ({ ...st, items: [...st.items] }));
+  const box = $("stackList");
+  if (stacks.length === 0) {
+    box.innerHTML = `<div class="group"><div class="row"><span class="row-icon">${icon("widgets")}</span>
+      <span class="row-text"><b>還沒有疊放</b><small>例如把時鐘、天氣、日曆疊在同一格，省空間</small></span></div></div>`;
+    return;
+  }
+  box.replaceChildren(...stacks.map((st, si) => {
+    const el = document.createElement("div");
+    el.className = "group stack-card";
+    const info = (k) => WIDGET_INFO.find((w) => w.kind === k);
+    const missing = WIDGET_INFO.filter((w) => !st.items.includes(w.kind));
+    el.innerHTML = `
+      <div class="stack-top">
+        <b>疊放 ${si + 1}</b>
+        <span class="seg">${["s", "m", "l"].map((z) => `<button data-size="${z}" class="${z === st.size ? "on" : ""}">${SIZE_NAMES[z]}</button>`).join("")}</span>
+        <button class="btn small ghost" data-del>${icon("delete")}移除疊放</button>
+      </div>
+      <div class="stack-items">${st.items.map((k, i) => `
+        <div class="stack-item">
+          <span class="row-icon">${icon(info(k).icon)}</span><span class="name">${info(k).name}</span>
+          <span class="move"><button data-up="${i}" ${i === 0 ? "disabled" : ""}>↑</button><button data-down="${i}" ${i === st.items.length - 1 ? "disabled" : ""}>↓</button><button data-rm="${i}" title="從疊放拿掉">✕</button></span>
+        </div>`).join("")}</div>
+      <div class="stack-bottom">
+        ${missing.length ? `<select data-add><option value="">＋ 加入小組件…</option>${missing.map((w) => `<option value="${w.kind}">${w.name}</option>`).join("")}</select>` : ""}
+        <label>自動輪播<input type="checkbox" class="switch" data-rotate ${st.rotate ? "checked" : ""} /></label>
+      </div>`;
+    const commit = (msg) => saveStacks(stacks, msg);
+    el.querySelectorAll("[data-size]").forEach((b) => b.addEventListener("click", () => { st.size = b.dataset.size; commit(`疊放改成${SIZE_NAMES[st.size]}尺寸`); }));
+    el.querySelector("[data-del]").addEventListener("click", () => { stacks.splice(si, 1); commit("已移除疊放"); });
+    el.querySelectorAll("[data-up]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.up; [st.items[i - 1], st.items[i]] = [st.items[i], st.items[i - 1]]; commit(); }));
+    el.querySelectorAll("[data-down]").forEach((b) => b.addEventListener("click", () => { const i = +b.dataset.down; [st.items[i + 1], st.items[i]] = [st.items[i], st.items[i + 1]]; commit(); }));
+    el.querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", () => {
+      st.items.splice(+b.dataset.rm, 1);
+      if (st.items.length === 0) stacks.splice(si, 1);
+      commit("已拿掉");
+    }));
+    el.querySelector("[data-add]")?.addEventListener("change", (e) => { if (e.target.value) { st.items.push(e.target.value); commit("已加入疊放"); } });
+    el.querySelector("[data-rotate]").addEventListener("change", (e) => { st.rotate = e.target.checked; commit(e.target.checked ? "每 20 秒自動換下一個" : "不自動輪播"); });
+    return el;
+  }));
+}
+$("addStack").addEventListener("click", () => {
+  const stacks = [...(state.settings.stacks || []), { id: Date.now().toString(36), items: ["clock", "weather", "calendar"], size: "s", rotate: false }];
+  saveStacks(stacks, "已新增疊放（時鐘、天氣、日曆），可以再改");
+});
+
 $("showWidgets").addEventListener("click", () => { window.api.mgrShowWidgets(); toast("小組件回來了"); });
 $("resetPos").addEventListener("click", () => { window.api.mgrResetPositions(); toast("已放回右上角"); });
 
@@ -107,6 +160,7 @@ function renderBluetooth() {
 }
 
 function renderDevices() {
+  renderBatteryList();
   const list = [...state.devices].sort((a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name));
   if (list.length === 0) {
     $("deviceList").innerHTML = `<div class="row"><span class="row-text"><b>還沒有偵測到藍牙裝置</b>
@@ -126,6 +180,39 @@ function renderDevices() {
       <input type="checkbox" class="switch" ${muted[d.id] ? "" : "checked"} title="這台裝置的通知" />`;
     row.querySelector("input").addEventListener("change", (e) =>
       save({ bluetooth: { mute: { [d.id]: !e.target.checked } } }, e.target.checked ? "會通知" : "不會再通知這台"));
+    return row;
+  }));
+}
+
+// 電量小組件：顯示哪些、順序
+function renderBatteryList() {
+  const prefs = state.settings.batteryWidget || { hidden: {}, order: [] };
+  const known = [...state.devices];
+  const order = (prefs.order || []).filter((id) => known.some((d) => d.id === id));
+  for (const d of known.sort((a, b) => a.name.localeCompare(b.name))) if (!order.includes(d.id)) order.push(d.id);
+  if (order.length === 0) {
+    $("battList").innerHTML = `<div class="row"><span class="row-text"><small>還沒有偵測到裝置</small></span></div>`;
+    return;
+  }
+  const move = (i, dir) => {
+    const next = [...order];
+    [next[i], next[i + dir]] = [next[i + dir], next[i]];
+    save({ batteryWidget: { order: next } });
+  };
+  $("battList").replaceChildren(...order.map((id, i) => {
+    const d = known.find((x) => x.id === id);
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <span class="row-icon ${d.connected ? "blue" : ""}">${deviceIcon(deviceType(d.name, d.cod))}</span>
+      <span class="row-text"><b>${escapeHTML(d.name)}</b><small>${d.connected ? (d.battery != null ? `電量 ${d.battery}%` : "已連線・讀不到電量") : "未連線"}</small></span>
+      <span class="move"><button title="往上" ${i === 0 ? "disabled" : ""}>↑</button><button title="往下" ${i === order.length - 1 ? "disabled" : ""}>↓</button></span>
+      <input type="checkbox" class="switch" title="顯示在電量小組件" ${prefs.hidden?.[id] ? "" : "checked"} />`;
+    const [up, down] = row.querySelectorAll(".move button");
+    up.addEventListener("click", () => move(i, -1));
+    down.addEventListener("click", () => move(i, 1));
+    row.querySelector("input").addEventListener("change", (e) =>
+      save({ batteryWidget: { hide: { [id]: !e.target.checked } } }, e.target.checked ? "會顯示" : "不顯示在電量小組件"));
     return row;
   }));
 }
@@ -237,6 +324,77 @@ $("pnUrlSave").addEventListener("click", async () => {
   window.api.mgrPinsChanged();
   toast("已套用");
   loadPinterest();
+});
+
+/* ───────── 音訊輸出 ───────── */
+let audio = { outputs: [], auto: false, priority: [] };
+// Windows 的名稱像「耳機 (INZONE Buds)」：外面是種類時，括號裡才是裝置名稱
+const AU_GENERIC = /^(喇叭|揚聲器|耳機|耳麥|頭戴式耳機|speakers?|headphones?|headset( earphone)?|earphones?|digital audio|數位音訊|realtek.*)$/i;
+const auSplit = (name) => {
+  const m = String(name).match(/^(.*?)\s*\((.+)\)$/);
+  if (!m) return { title: name, sub: "" };
+  return AU_GENERIC.test(m[1].trim()) ? { title: m[2], sub: m[1] } : { title: m[1], sub: m[2] };
+};
+function auIcon(name) {
+  const t = deviceType(name);
+  if (t !== "other" && t !== "phone") return t;
+  if (/monitor|display|hdmi|samsung|lg |dell|benq|asus|顯示器|螢幕/i.test(name)) return "pc";
+  return "speaker";
+}
+async function loadAudio() {
+  audio = await window.api.audioGet();
+  renderAudio();
+}
+function renderAudio() {
+  $("auAuto").checked = !!audio.auto;
+  if (audio.outputs.length === 0) {
+    $("auNow").innerHTML = `<div class="row"><span class="row-text"><b>沒有找到音訊輸出裝置</b><small>程式剛開的話等幾秒</small></span></div>`;
+  } else {
+    $("auNow").replaceChildren(...audio.outputs.map((o) => {
+      const n = auSplit(o.name);
+      const row = document.createElement("div");
+      row.className = "row clickable" + (o.default ? " on" : "");
+      row.innerHTML = `<span class="row-icon ${o.default ? "blue" : ""}">${icon(auIcon(o.name))}</span>
+        <span class="row-text"><b>${escapeHTML(n.title)}</b><small>${escapeHTML(n.sub)}</small></span>
+        ${o.default ? `<span class="check">${icon("check_circle")}</span>` : ""}`;
+      row.addEventListener("click", async () => {
+        if (await window.api.audioSet(o.id)) toast(`聲音改從「${n.title}」出來`);
+      });
+      return row;
+    }));
+  }
+  const names = audio.priority.length ? audio.priority : audio.outputs.map((o) => o.name);
+  const move = (i, dir) => {
+    const next = [...names];
+    [next[i], next[i + dir]] = [next[i + dir], next[i]];
+    audio.priority = next;
+    renderAudio();
+    window.api.mgrSet({ audio: { priority: next } });
+  };
+  $("auPriority").replaceChildren(...names.map((name, i) => {
+    const n = auSplit(name);
+    const here = audio.outputs.some((o) => o.name === name);
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="num" style="width:26px;text-align:center;font-weight:700;color:var(--ink-soft)">${i + 1}</span>
+      <span class="row-icon">${icon(auIcon(name))}</span>
+      <span class="row-text"><b>${escapeHTML(n.title)}</b><small>${here ? "現在接著" : "現在沒接"}${n.sub ? "・" + escapeHTML(n.sub) : ""}</small></span>
+      <span class="move"><button ${i === 0 ? "disabled" : ""}>↑</button><button ${i === names.length - 1 ? "disabled" : ""}>↓</button></span>`;
+    const [up, down] = row.querySelectorAll(".move button");
+    up.addEventListener("click", () => move(i, -1));
+    down.addEventListener("click", () => move(i, 1));
+    return row;
+  }));
+}
+$("auAuto").addEventListener("change", async (e) => {
+  await window.api.mgrSet({ audio: { auto: e.target.checked } });
+  audio.auto = e.target.checked;
+  toast(e.target.checked ? "會自動切換" : "不會自動切換");
+});
+window.api.onAudio?.((list) => {
+  audio.outputs = list;
+  for (const o of list) if (!audio.priority.includes(o.name)) audio.priority.push(o.name);
+  if (document.querySelector('section[data-section="audio"].on')) renderAudio();
 });
 
 /* ───────── Google 日曆：登入帳號 ───────── */
