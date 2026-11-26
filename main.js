@@ -6,6 +6,7 @@ const fs = require("fs");
 const { createPinterestApi } = require("./pinterest-api");
 const wallpaper = require("./wallpaper");
 const { createCalendar } = require("./calendar");
+const { autoUpdater } = require("electron-updater");
 
 /* ───────── 設定檔（存在 %APPDATA%\Glass Widgets\settings.json）───────── */
 const SETTINGS_FILE = path.join(app.getPath("userData"), "settings.json");
@@ -481,6 +482,34 @@ ipcMain.on("mgr:quit", () => app.quit());
 // 管理程式改了 Pinterest 設定 → 通知 Pinterest 小組件重新讀
 ipcMain.on("mgr:pins-changed", () => widgetWins.pinterest?.webContents.send("pins:changed"));
 
+/* ───────── 自動更新（從 GitHub Releases 下載新版）───────── */
+// 有新版時在背景下載，下載好之後：關掉程式時自動裝好；也可以在管理程式按「立即更新」。
+let update = { state: "idle", version: "", progress: 0, error: "" };
+function setUpdate(patch) {
+  update = { ...update, ...patch };
+  managerWin?.webContents.send("update:state", update);
+}
+function setupUpdater() {
+  if (!app.isPackaged) return; // 開發模式（npm start）不檢查
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", error: "" }));
+  autoUpdater.on("update-available", (i) => setUpdate({ state: "downloading", version: i.version, progress: 0 }));
+  autoUpdater.on("update-not-available", () => setUpdate({ state: "latest" }));
+  autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", progress: Math.round(p.percent) }));
+  autoUpdater.on("update-downloaded", (i) => {
+    setUpdate({ state: "ready", version: i.version });
+    tray?.setToolTip(`Glass Widgets（新版 ${i.version} 已下載，重新開啟後就會更新）`);
+  });
+  autoUpdater.on("error", (e) => setUpdate({ state: "error", error: String(e?.message || e).split("\n")[0].slice(0, 200) }));
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(check, 30 * 1000);          // 開機 30 秒後檢查一次
+  setInterval(check, 6 * 60 * 60 * 1000); // 之後每 6 小時
+}
+ipcMain.handle("update:get", () => ({ ...update, current: app.getVersion(), packaged: app.isPackaged }));
+ipcMain.on("update:check", () => app.isPackaged && autoUpdater.checkForUpdates().catch(() => {}));
+ipcMain.on("update:install", () => { if (update.state === "ready") { app.isQuitting = true; autoUpdater.quitAndInstall(true, true); } });
+
 /* ───────── 系統匣圖示 ───────── */
 let tray = null;
 function buildTrayMenu() {
@@ -630,6 +659,7 @@ if (!app.requestSingleInstanceLock()) {
     screen.on("display-metrics-changed", () => Object.values(widgetWins).forEach((w) => sendBackdrop(w)));
     startWatcher();
     calendar.start();
+    setupUpdater();
     // 鎖定螢幕、睡眠時小組件停止更新，省電
     powerMonitor.on("lock-screen", () => setPaused(true));
     powerMonitor.on("suspend", () => setPaused(true));

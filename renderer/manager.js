@@ -317,6 +317,34 @@ $("autostart").addEventListener("change", (e) =>
 $("openFolder").addEventListener("click", () => window.api.mgrOpenFolder());
 $("quitApp").addEventListener("click", () => window.api.mgrQuit());
 
+/* 更新 */
+function renderUpdate(u) {
+  const msg = $("updateMsg"), btn = $("updateBtn");
+  btn.disabled = false;
+  btn.className = "btn small ghost";
+  btn.textContent = "檢查更新";
+  if (!u.packaged) { msg.textContent = "開發模式不會自動更新"; btn.disabled = true; return; }
+  switch (u.state) {
+    case "checking": msg.textContent = "檢查中…"; btn.disabled = true; break;
+    case "latest": msg.textContent = "已經是最新版"; break;
+    case "downloading": msg.textContent = `正在下載新版 ${u.version}…${u.progress ? u.progress + "%" : ""}`; btn.disabled = true; break;
+    case "ready":
+      msg.textContent = `新版 ${u.version} 下載好了，關掉程式時會自動裝好`;
+      btn.className = "btn small";
+      btn.textContent = "立即重新啟動並更新";
+      break;
+    case "error": msg.textContent = "檢查更新失敗：" + u.error; break;
+    default: msg.textContent = "會自動檢查更新（每 6 小時）";
+  }
+}
+$("updateBtn").addEventListener("click", async () => {
+  const u = await window.api.updateGet();
+  if (u.state === "ready") window.api.updateInstall();
+  else window.api.updateCheck();
+});
+window.api.onUpdate?.((u) => window.api.updateGet().then(renderUpdate));
+window.api.updateGet?.().then(renderUpdate);
+
 /* ───────── 開始 ───────── */
 function render() {
   renderWidgets();
