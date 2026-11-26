@@ -631,7 +631,9 @@ function batteryList() {
   const list = [];
   if (store.pc) list.push({ id: "pc", name: "這台電腦", type: "laptop", battery: Math.round(store.pc.level * 100), charging: store.pc.charging, sub: store.pc.charging ? "充電中" : "" });
   for (const d of store.devices.filter((d) => d.connected)) {
-    const charging = chargingGuess(d.id, d.battery);
+    // iPhone 捷徑有傳充電狀態就用那個（即時），不然用「電量有沒有變多」來猜
+    const guess = chargingGuess(d.id, d.battery);
+    const charging = typeof d.charging === "boolean" ? d.charging : guess;
     list.push({ id: d.id, name: d.name, type: deviceType(d.name, d.cod), battery: d.battery, charging, sub: d.battery == null ? "已連線" : charging ? "充電中" : "" });
   }
   // 有自己排過順序的照順序；沒排過的放後面，電量低的在前面

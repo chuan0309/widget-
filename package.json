@@ -25,6 +25,7 @@
       "calendar.js",
       "google.js",
       "cwa.js",
+      "phone-push.js",
       "oauth.json",
       "helper.ps1",
       "locate.ps1",

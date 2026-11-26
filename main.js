@@ -9,6 +9,7 @@ const { createCalendar } = require("./calendar");
 const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
+const { createPhonePush } = require("./phone-push");
 const { createPinterestHome } = require("./pinterest-home");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
@@ -67,6 +68,7 @@ const DEFAULTS = {
   audio: { auto: false, priority: [] }, // 音訊輸出：自動切換、優先順序（用裝置名稱）
   weatherSource: "openmeteo", // 天氣資料：openmeteo（免註冊）／cwa（中央氣象署，要授權碼）
   cwa: { key: "" },
+  phonePush: { on: false, token: "" }, // iPhone 捷徑：充電器接上／拔掉時直接通知電腦
   pinterestHome: false, // Pinterest 用「首頁推薦」（讀網頁版首頁）
   // 大時鐘：世界時鐘的 4 個城市
   worldClocks: [
@@ -539,9 +541,15 @@ function evaluateDevices() {
     if (d.connected) lastSeen.set(d.id, now);
     if (d.battery != null) lastBattery.set(d.id, d.battery);
   }
+  const pushed = phonePush.current(); // iPhone 捷徑傳來的充電狀態（有開才有）
   const next = rawDevices.map((d) => {
     const connected = d.connected || now - (lastSeen.get(d.id) ?? -Infinity) < DISCONNECT_GRACE;
-    return { ...d, connected, battery: d.battery ?? (connected ? lastBattery.get(d.id) ?? null : null) };
+    const out = { ...d, connected, battery: d.battery ?? (connected ? lastBattery.get(d.id) ?? null : null) };
+    if (pushed && /iphone/i.test(d.name)) {
+      if (pushed.level != null) out.battery = pushed.level;
+      if (pushed.charging != null) out.charging = pushed.charging;
+    }
+    return out;
   });
 
   const wasConnected = new Set(devices.filter((d) => d.connected).map((d) => d.id));
@@ -908,6 +916,16 @@ ipcMain.on("open-pin", (_e, link) => {
 /* ───────── IPC ───────── */
 // 中央氣象署：選了它而且有授權碼才用；回傳 null 代表用 Open-Meteo
 const cwa = createCwa(settings, saveSettings, log);
+// iPhone 捷徑：一收到就馬上更新電量小組件；接上充電器時也跳一下瀏海通知
+const phonePush = createPhonePush(settings, saveSettings, (st) => {
+  evaluateDevices();
+  const phone = devices.find((d) => d.connected && /iphone/i.test(d.name));
+  if (st.charging && settings.bluetooth.notifyConnect) showPopup(phone || { id: "iphone-push", name: "iPhone", connected: true, battery: st.level, charging: true });
+  else if (phone && popupDevice?.id === phone.id && popup && !popup.isDestroyed()) popup.webContents.send("popup:device", popupPayload(phone));
+}, log);
+ipcMain.handle("phone:info", () => phonePush.info());
+ipcMain.handle("phone:set", (_e, on) => { phonePush.setOn(on); return phonePush.info(); });
+ipcMain.handle("phone:new-token", () => { phonePush.newToken(); return phonePush.info(); });
 ipcMain.handle("weather:cwa", async () => {
   if (settings.weatherSource !== "cwa" || !cwa.hasKey()) return null;
   return cwa.weather(settings.city);
@@ -1017,6 +1035,7 @@ if (!app.requestSingleInstanceLock()) {
     tray.on("click", () => openManager());
     buildTrayMenu();
     startHelper();
+    phonePush.apply();
     createHost();
     refreshWallpaper(true);
     setInterval(refreshWallpaper, 30 * 1000); // 換桌布時跟著換（只看檔案時間，很省）

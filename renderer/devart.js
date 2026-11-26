@@ -75,16 +75,26 @@
   };
   // 特定型號（照裝置名稱挑）：比一般圖示更像實際的樣子
   const MODEL = {
-    // PS5 DualSense：兩側白、中間黑、上面大觸控板、藍色光條
+    // PS5 DualSense（珍珠白配色，照使用者的影片）：珍珠白帶一點粉紫／湖水綠的光澤，
+    // 中間也是淺色，觸控板兩邊有藍色光條，搖桿是淺灰色
     dualsense: `<g filter="url(#da-sh)">
-      <path d="M18 17 h28 c8.5 0 12.5 8 15 19.5 c2.2 10.5 -2.8 15.5 -7.5 13.5 c-4 -1.8 -6 -8.5 -10.5 -8.5 h-22 c-4.5 0 -6.5 6.7 -10.5 8.5 c-4.7 2 -9.7 -3 -7.5 -13.5 C5.5 25 9.5 17 18 17z" fill="url(#da-w)"/>
-      <path d="M20 27 h24 c2 0 3 1.5 3 3.5 v6 c0 3 -2 4.5 -5 4.5 h-20 c-3 0 -5 -1.5 -5 -4.5 v-6 c0 -2 1 -3.5 3 -3.5z" fill="url(#da-k)"/>
-      <rect x="22" y="17.5" width="20" height="10.5" rx="2.5" fill="#f4f5f7" stroke="#c3c8cf" stroke-width=".6"/>
-      <path d="M21.5 19 v8 M42.5 19 v8" stroke="#3d8bff" stroke-width="1.1" stroke-linecap="round" opacity=".9"/>
-      <circle cx="25.5" cy="35" r="3.6" fill="#0d0e11" stroke="#4a4d54" stroke-width=".7"/><circle cx="38.5" cy="35" r="3.6" fill="#0d0e11" stroke="#4a4d54" stroke-width=".7"/>
-      <circle cx="32" cy="32" r="1.3" fill="#9aa0a8"/>
-      <path d="M12.5 26 h5 M15 23.5 v5" stroke="#a7adb5" stroke-width="1.8" stroke-linecap="round"/>
-      <circle cx="49" cy="23.5" r="1.3" fill="#a7adb5"/><circle cx="52" cy="26.5" r="1.3" fill="#a7adb5"/><circle cx="46" cy="26.5" r="1.3" fill="#a7adb5"/><circle cx="49" cy="29.5" r="1.3" fill="#a7adb5"/></g>`,
+      <defs>
+        <linearGradient id="da-pearl" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f6f4fb"/><stop offset=".3" stop-color="#e6def3"/><stop offset=".55" stop-color="#dde9f1"/><stop offset=".8" stop-color="#cfe3e8"/><stop offset="1" stop-color="#b9c4d6"/>
+        </linearGradient>
+        <linearGradient id="da-pad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#efe9f8"/><stop offset="1" stop-color="#d4d0e6"/></linearGradient>
+        <radialGradient id="da-stick" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#f1f2f6"/><stop offset="1" stop-color="#b8bcc8"/></radialGradient>
+      </defs>
+      <path d="M18 17 h28 c8.5 0 12.5 8 15 19.5 c2.2 10.5 -2.8 15.5 -7.5 13.5 c-4 -1.8 -6 -8.5 -10.5 -8.5 h-22 c-4.5 0 -6.5 6.7 -10.5 8.5 c-4.7 2 -9.7 -3 -7.5 -13.5 C5.5 25 9.5 17 18 17z" fill="url(#da-pearl)"/>
+      <path d="M8 36 c2 -9 5 -15 9 -17" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>
+      <rect x="22" y="17.5" width="20" height="11" rx="2.5" fill="url(#da-pad)" stroke="#b9b6cc" stroke-width=".5"/>
+      <path d="M21.6 19.5 c-.6 3 -.6 6 .3 9 M42.4 19.5 c.6 3 .6 6 -.3 9" fill="none" stroke="#36a3ff" stroke-width="1.3" stroke-linecap="round"/>
+      <path d="M21.6 19.5 c-.6 3 -.6 6 .3 9 M42.4 19.5 c.6 3 .6 6 -.3 9" fill="none" stroke="#36a3ff" stroke-width="3" stroke-linecap="round" opacity=".25"/>
+      <circle cx="25.5" cy="35.5" r="3.9" fill="url(#da-stick)" stroke="#a9adbb" stroke-width=".6"/><circle cx="38.5" cy="35.5" r="3.9" fill="url(#da-stick)" stroke="#a9adbb" stroke-width=".6"/>
+      <circle cx="25.5" cy="35.5" r="2.2" fill="none" stroke="#c9ccd6" stroke-width=".6"/><circle cx="38.5" cy="35.5" r="2.2" fill="none" stroke="#c9ccd6" stroke-width=".6"/>
+      <path d="M30.6 31.5 h2.8" stroke="#8d92a3" stroke-width="1" stroke-linecap="round"/>
+      ${[[0, -3], [3, 0], [0, 3], [-3, 0]].map(([x, y]) => `<rect x="${13.5 + x}" y="${24.6 + y}" width="3" height="2.6" rx=".8" fill="#e9eaf2" stroke="#a4a9b8" stroke-width=".5"/>`).join("")}
+      ${[[0, -3], [3, 0], [0, 3], [-3, 0]].map(([x, y]) => `<circle cx="${49 + x}" cy="${26 + y}" r="1.45" fill="#edeef5" stroke="#a4a9b8" stroke-width=".5"/>`).join("")}</g>`,
     // 羅技 MX Master：石墨灰、人體工學、左邊大拇指托、銀色滾輪
     mxmaster: `<g filter="url(#da-sh)">
       <defs><linearGradient id="da-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5a5e66"/><stop offset="1" stop-color="#25272c"/></linearGradient></defs>
@@ -94,17 +104,30 @@
       <rect x="29.6" y="9" width="4.8" height="10" rx="2.4" fill="#c7cbd1"/>
       <rect x="10.5" y="28.5" width="5" height="2.4" rx="1.2" fill="#8a8f97"/>
       <circle cx="35" cy="26" r="1.1" fill="#8a8f97"/></g>`,
-    // NuPhy Air60：60% 矮軸鍵盤，白鍵帽＋灰色功能鍵，橘色 Esc
+    // NuPhy Air60（照使用者的影片）：淺灰鋁框、白鍵帽、灰色功能鍵、
+    // 黃色空白鍵、紅橘色 Enter、湖水綠 Esc
     nuphy: `<g filter="url(#da-sh)">
-      <rect x="3" y="19" width="58" height="27" rx="3.5" fill="url(#da-w)"/>
-      ${[0, 1, 2, 3].map((r) => Array.from({ length: 12 }, (_, c) => {
-        const x = 5.5 + c * 4.5 + (r % 2) * 0.8, y = 21.5 + r * 5;
-        const mod = c === 0 || c === 11;
-        const esc = r === 0 && c === 0;
-        return `<rect x="${x.toFixed(1)}" y="${y}" width="3.8" height="4.1" rx=".9" fill="${esc ? "#ff7a3c" : mod ? "#9aa0a8" : "#f3f4f6"}" stroke="#c2c7ce" stroke-width=".4"/>`;
-      }).join("")).join("")}
-      <rect x="20" y="41.3" width="24" height="3.6" rx=".9" fill="#f3f4f6" stroke="#c2c7ce" stroke-width=".4"/>
-      <rect x="5.5" y="41.3" width="12" height="3.6" rx=".9" fill="#9aa0a8"/><rect x="46.5" y="41.3" width="12" height="3.6" rx=".9" fill="#9aa0a8"/></g>`,
+      <defs><linearGradient id="da-alu" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6e9ec"/><stop offset="1" stop-color="#b9bfc5"/></linearGradient></defs>
+      <rect x="3" y="18.5" width="58" height="28" rx="3" fill="url(#da-alu)"/>
+      ${(() => {
+        const W = "#f7f7f5", G = "#a3abb1", out = [];
+        const key = (x, y, w, c) => out.push(`<rect x="${x.toFixed(2)}" y="${y}" width="${w.toFixed(2)}" height="4" rx=".8" fill="${c}" stroke="rgba(0,0,0,.16)" stroke-width=".35"/><rect x="${(x + .5).toFixed(2)}" y="${y + .4}" width="${(w - 1).toFixed(2)}" height="2.6" rx=".6" fill="#fff" opacity="${c === W ? .55 : .18}"/>`);
+        const u = 3.6, x0 = 5, step = 0.26;
+        // 每一列：[寬度(單位), 顏色]
+        const rows = [
+          [[1, "#5cc8b9"], ...Array(12).fill([1, W]), [2, G]],
+          [[1.5, G], ...Array(12).fill([1, W]), [1.5, W]],
+          [[1.75, G], ...Array(11).fill([1, W]), [2.25, "#ea5a3d"]],
+          [[2.25, G], ...Array(10).fill([1, W]), [1.75, G], [1, G]],
+          [[1.25, G], [1.25, G], [1.25, G], [6.25, "#f4c04b"], [1, G], [1, G], [1, G], [1, G], [1, G]],
+        ];
+        rows.forEach((r, ri) => {
+          let x = x0;
+          const total = r.reduce((t, [w]) => t + w, 0), scale = 15 / total;
+          for (const [w, c] of r) { const ww = w * u * scale; key(x, 20.5 + ri * 5, ww - step, c); x += ww; }
+        });
+        return out.join("");
+      })()}</g>`,
     // iPhone：鈦金屬邊框、動態島、側邊按鈕
     iphone: `<g filter="url(#da-sh)">
       <rect x="16.4" y="16" width="1.6" height="6" rx=".8" fill="#9a9ca0"/><rect x="16.4" y="24" width="1.6" height="8" rx=".8" fill="#9a9ca0"/><rect x="46" y="21" width="1.6" height="11" rx=".8" fill="#9a9ca0"/>

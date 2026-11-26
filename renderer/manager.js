@@ -714,3 +714,25 @@ function renderWorldClocks() {
     return row;
   }));
 }
+
+/* ───────── iPhone 充電即時顯示（捷徑） ───────── */
+const PH_STATUS = { on: "開著，等 iPhone 傳過來", starting: "啟動中…", off: "關閉", busy: "連接埠被別的程式用了，重開電腦再試", error: "開不起來，看一下 debug.log" };
+function renderPhone(info) {
+  if (!info) return;
+  $("phOn").checked = info.on;
+  $("phBox").hidden = $("phSteps").hidden = !info.on;
+  let st = PH_STATUS[info.status] || info.status;
+  if (info.last) st = `上次收到：${new Date(info.last.at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })}（${info.last.charging ? "充電中" : "沒在充電"}${info.last.level != null ? `，${info.last.level}%` : ""}）`;
+  if (info.on && !info.ips.length) st = "找不到這台電腦的 Wi-Fi 位址，先連上 Wi-Fi";
+  $("phStatus").textContent = st;
+  $("phPlug").textContent = info.plugUrl;
+  $("phUnplug").textContent = info.unplugUrl;
+}
+const phRefresh = () => window.api.phoneInfo?.().then(renderPhone);
+phRefresh();
+setInterval(() => !$("phBox").hidden && phRefresh(), 5000);
+$("phOn").addEventListener("change", async (e) => { renderPhone(await window.api.phoneSet(e.target.checked)); setTimeout(phRefresh, 800); });
+$("phToken").addEventListener("click", async () => { renderPhone(await window.api.phoneNewToken()); toast("已換新密碼，iPhone 上的網址也要更新"); });
+for (const b of document.querySelectorAll("[data-copy]")) b.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); toast("已複製"); } catch { toast("複製失敗"); }
+});

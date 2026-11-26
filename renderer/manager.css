@@ -353,3 +353,9 @@ select.select option { background: #2c2c2e; }
 .bg-swatch.font small { font-size: 13px; color: #ff453a; }
 .bg-swatch.font.bold b, .bg-swatch.font.bold small { font-weight: 700; }
 .bg-swatch.font.light b, .bg-swatch.font.light small { font-weight: 300; }
+
+/* iPhone 捷徑 */
+.row-text small.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px; white-space: normal; word-break: break-all; user-select: text; }
+.ph-steps { margin: 8px 0 0; padding-left: 22px; line-height: 1.7; }
+.ph-steps li { margin: 2px 0; }
+#phBox .row-text small { white-space: normal; }
