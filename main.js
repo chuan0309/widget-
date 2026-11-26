@@ -811,6 +811,11 @@ const pinApi = createPinterestApi({ settings, save: saveSettings });
 
 const pinHome = createPinterestHome(log);
 async function fetchPins() {
+  const r = await fetchPinsRaw();
+  log("pins", { home: !!settings.pinterestHome, count: r.pins?.length || 0, error: r.error || "", sample: r.pins?.[0]?.img || "" });
+  return r;
+}
+async function fetchPinsRaw() {
   // 首頁推薦（依興趣）：讀不到時退回圖版／公開網址
   if (settings.pinterestHome) {
     const r = await pinHome.fetchHome();
