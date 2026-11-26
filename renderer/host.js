@@ -829,8 +829,8 @@ WIDGETS.pinterest = {
     pane.__sig = sig;
     const n = PIN_CELLS[inst.size] || 1;
     pane.__html = null;
-    pane.innerHTML = `<div class="pn-grid n${n}">${Array.from({ length: n }, () =>
-      `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`).join("")}</div>`;
+    const cell = `<div class="pn-cell"><img class="pn-photo" draggable="false" alt=""><img class="pn-photo" draggable="false" alt=""></div>`;
+    pane.innerHTML = `<div class="pn-grid n${n}">${cell.repeat(n)}</div>`;
     inst.slide = Math.min(n, r.pins.length) - 1;
     pane.querySelectorAll(".pn-cell").forEach((cell, i) => WIDGETS.pinterest.show(cell, r.pins[i % r.pins.length], inst));
     inst.swappedAt = Date.now();
