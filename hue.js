@@ -4,6 +4,7 @@
 // - 找 Bridge：先問 Hue 官方的 discovery.meethue.com（只會回傳你家網路上 Bridge 的內部 IP），找不到可以手動輸入 IP
 
 const { net, safeStorage } = require("electron");
+const https = require("https");
 
 const seal = (t) => (!t ? "" : safeStorage.isEncryptionAvailable() ? "enc:" + safeStorage.encryptString(t).toString("base64") : t);
 const unseal = (t) => {
@@ -51,6 +52,36 @@ function stateColor(st = {}) {
   return "rgb(255,214,150)";
 }
 
+// Hue 的新介面（CLIP v2）：智慧場景（自然光…）、哪個場景正在用，都只有這裡拿得到。
+// 走 HTTPS，但 Bridge 的憑證是 Philips 自己簽的，一般瀏覽器不認得，所以只對「已配對的 Bridge IP」放寬檢查
+function v2call(ip, key, path, method = "GET", body) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const req = https.request({
+      host: ip, port: 443, path: `/clip/v2/resource/${path}`, method, rejectUnauthorized: false, timeout: 5000,
+      headers: { "hue-application-key": key, ...(data ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {}) },
+    }, (res) => {
+      let buf = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (buf += c));
+      res.on("end", () => {
+        if (res.statusCode === 404) return reject(new Error("no v2"));
+        try { resolve(JSON.parse(buf)); } catch { reject(new Error("bad json")); }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+const v2Color = (a = {}) => {
+  if (a.on && a.on.on === false) return null;
+  if (a.color?.xy) return xyToRgb(a.color.xy.x, a.color.xy.y, Math.round(((a.dimming?.brightness ?? 100) / 100) * 254));
+  if (a.color_temperature?.mirek) return ctToRgb(a.color_temperature.mirek);
+  return "rgb(255,214,150)";
+};
+
 function createHue(settings, saveSettings, log = () => {}) {
   const sceneColors = new Map(); // 場景 id → { at, colors }（場景很少改，一小時讀一次）
   const H = () => (settings.hue ||= { ip: "", key: "", hidden: {}, order: [] });
@@ -96,11 +127,43 @@ function createHue(settings, saveSettings, log = () => {}) {
     saveSettings();
   }
 
+  // 新介面的場景＋智慧場景；Bridge 太舊沒有新介面時回傳 null，改用舊介面的場景
+  async function scenesV2() {
+    const key = unseal(H().key);
+    try {
+      const [sc, smart, rooms, zones] = await Promise.all(["scene", "smart_scene", "room", "zone"].map((t) => v2call(H().ip, key, t).catch((e) => (t === "scene" ? Promise.reject(e) : { data: [] }))));
+      if (!Array.isArray(sc?.data)) return null;
+      const names = new Map([...(rooms.data || []), ...(zones.data || [])].map((r) => [r.id, r.metadata?.name || ""]));
+      const colorsOf = (scene) => {
+        const fromActions = (scene.actions || []).map((x) => v2Color(x.action));
+        const fromPalette = [...(scene.palette?.color || []).map((c) => v2Color({ color: c.color, dimming: c.dimming })),
+          ...(scene.palette?.color_temperature || []).map((c) => v2Color({ color_temperature: c.color_temperature }))];
+        return [...new Set([...fromPalette, ...fromActions].filter(Boolean))].slice(0, 3);
+      };
+      const byId = new Map(sc.data.map((x) => [x.id, x]));
+      const items = [];
+      // 智慧場景（自然光、大自然的色彩…）：照時間自動換；顏色拿它裡面各時段場景的顏色
+      for (const z of smart.data || []) {
+        const targets = (z.week_timeslots || []).flatMap((w) => (w.timeslots || []).map((t) => t.target?.rid)).filter(Boolean);
+        const cols = [...new Set(targets.flatMap((rid) => (byId.get(rid) ? colorsOf(byId.get(rid)) : [])))].slice(0, 3);
+        items.push({ id: "z" + z.id, kind: "scene", smart: true, name: z.metadata?.name || "智慧場景", room: names.get(z.group?.rid) || "Hue", on: z.state === "active", colors: cols });
+      }
+      for (const x of sc.data) {
+        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", colors: colorsOf(x) });
+      }
+      return items;
+    } catch (e) {
+      log("hue v2 unavailable", e.message);
+      return null;
+    }
+  }
+
   // 房間（Hue App 裡的「房間」「區域」）和每一盞燈，統一成小組件用的格式
   async function state() {
     if (!paired()) return { needSetup: true };
     try {
-      const [lights, groups, scenes] = await Promise.all([call(`${base()}/lights`), call(`${base()}/groups`), call(`${base()}/scenes`).catch(() => ({}))]);
+      const [lights, groups, v2] = await Promise.all([call(`${base()}/lights`), call(`${base()}/groups`), scenesV2()]);
+      const scenes = v2 ? {} : await call(`${base()}/scenes`).catch(() => ({}));
       if (Array.isArray(lights) && lights[0]?.error?.type === 1) return { needSetup: true, error: "Bridge 的金鑰失效了，請重新配對" };
       const items = [];
       for (const [id, g] of Object.entries(groups || {})) {
@@ -112,7 +175,8 @@ function createHue(settings, saveSettings, log = () => {}) {
           count: (g.lights || []).length,
         });
       }
-      // 場景（Hue App 裡每個房間的「場景」）：名稱前面加房間名，點一下就套用
+      if (v2) items.push(...v2);
+      // （舊介面）場景：點一下就套用
       const roomName = (gid) => groups?.[gid]?.name || "";
       for (const [id, sc] of Object.entries(scenes && !Array.isArray(scenes) ? scenes : {})) {
         if (sc.recycle) continue; // Hue 自動產生的暫存場景
@@ -128,7 +192,7 @@ function createHue(settings, saveSettings, log = () => {}) {
         });
       }
       // 每個場景裡燈的顏色（要一個一個問，有快取）
-      const need = items.filter((it) => it.kind === "scene" && !(sceneColors.get(it.sid)?.at > Date.now() - 3600e3));
+      const need = items.filter((it) => it.sid && !(sceneColors.get(it.sid)?.at > Date.now() - 3600e3));
       await Promise.all(need.slice(0, 40).map(async (it) => {
         try {
           const d = await call(`${base()}/scenes/${it.sid}`);
@@ -136,7 +200,7 @@ function createHue(settings, saveSettings, log = () => {}) {
           sceneColors.set(it.sid, { at: Date.now(), colors: cols });
         } catch {}
       }));
-      for (const it of items) if (it.kind === "scene") it.colors = sceneColors.get(it.sid)?.colors || [];
+      for (const it of items) if (it.sid) it.colors = sceneColors.get(it.sid)?.colors || [];
       // 最後一格：全部關閉（跟 Hue 的小工具一樣）
       items.push({ id: "off", kind: "off", name: "關閉", room: "Hue Bridge", on: false });
       return { items };
@@ -151,6 +215,14 @@ function createHue(settings, saveSettings, log = () => {}) {
     if (id === "off") {
       try { await call(`${base()}/groups/0/action`, "PUT", { on: false }); return { ok: true }; }
       catch { return { error: "連不到 Hue Bridge" }; }
+    }
+    const vm = String(id).match(/^([vz])([0-9a-f-]{36})$/i);
+    if (vm) {
+      try {
+        const r = await v2call(H().ip, unseal(H().key), vm[1] === "z" ? `smart_scene/${vm[2]}` : `scene/${vm[2]}`, "PUT",
+          { recall: { action: vm[1] === "z" ? "activate" : "active" } });
+        return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
+      } catch { return { error: "連不到 Hue Bridge" }; }
     }
     const sm = String(id).match(/^s([\w-]+)@(\d+)$/);
     if (sm) {

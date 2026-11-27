@@ -409,3 +409,4 @@ button.setup-msg { border: 0; background: none; color: inherit; font: inherit; c
 .hm-s .hm-ico.scene, .hm-s .hm-ico.off { width: 26px; height: 26px; }
 .hm-s .hm-ico.off::after { border-width: 2px; }
 .hm-text b { font-size: 13.5px; }
+.hm-ico.scene.smart svg { width: 55%; height: 55%; fill: rgba(0, 0, 0, 0.75); }

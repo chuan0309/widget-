@@ -762,7 +762,8 @@ function homeIcon(it) {
   if (it.kind === "scene") {
     const c = it.colors?.length ? it.colors : ["rgb(255,214,150)"];
     const bg = c.length === 1 ? c[0] : `conic-gradient(from 200deg, ${[...c, c[0]].join(",")})`;
-    return `<span class="hm-ico scene" style="background:${bg}"></span>`;
+    // 智慧場景（自然光…）：跟 Hue 一樣在圓形中間放一個時鐘
+    return `<span class="hm-ico scene ${it.smart ? "smart" : ""}" style="background:${bg}">${it.smart ? icon("schedule") : ""}</span>`;
   }
   return `<span class="hm-ico">${icon(it.kind === "room" ? "home" : "bulb")}</span>`;
 }
@@ -778,7 +779,7 @@ WIDGETS.home = {
     if (target.closest("[data-setup]")) return api.mgrOpen("home");
     const t = target.closest("[data-hid]");
     if (!t) return;
-    if (t.dataset.hid.startsWith("s") || t.dataset.hid === "off") {
+    if (/^[svz]/.test(t.dataset.hid) || t.dataset.hid === "off") {
       // 場景：套用，閃一下「已套用」
       t.classList.add("on");
       const st = t.querySelector("small");
