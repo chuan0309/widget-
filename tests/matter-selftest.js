@@ -60,8 +60,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (ac.state.onOff.onOff !== true || ac.state.thermostat.occupiedCoolingSetpoint !== 2500) fail("ac on/setpoint " + ac.state.thermostat.occupiedCoolingSetpoint);
   await home.set(f.id, { pct: 60 }); await sleep(500);
   if (fan.state.fanControl.percentSetting !== 60) fail("fan pct " + fan.state.fanControl.percentSetting);
+  // 模擬「用手機關掉冷氣」：直接改設備的狀態，state() 要讀到新的
+  await ac.set({ onOff: { onOff: false } }); await sleep(800);
   items = await home.state();
   console.log("after", JSON.stringify(items));
+  if (items.find((i) => i.id === a.id).on !== false) fail("state did not follow a change made elsewhere");
+  // 再從小組件打開、再關掉，每一次都要真的有變（以前第二次以後沒反應）
+  for (const want of [true, false, true]) {
+    await home.set(a.id, { on: want }); await sleep(500);
+    if (ac.state.onOff.onOff !== want) fail("toggle " + want);
+    if ((await home.state()).find((i) => i.id === a.id).on !== want) fail("state after toggle " + want);
+  }
   console.log("MATTER SELFTEST OK");
   await home.close();
   await dev.close();

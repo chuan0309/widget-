@@ -770,7 +770,7 @@ function homeItems(d) {
 }
 // 方塊：左上角圖示，下面兩行「房間／名稱」（照 iPhone「家庭」小工具）
 const homeIcon = (it) => icon(homeIconName(it, store.home?.prefs?.icons));
-const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.kind === "fan" && it.on && it.pct ? `風速 ${it.pct}%` : it.room || "";
+const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.kind === "ac" && !it.on ? "關閉" : it.kind === "fan" && it.on && it.pct ? `風速 ${it.pct}%` : it.room || "";
 const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
 
 /* ───────── 家庭：長按跳出的控制面板（照 iPhone「家庭」） ─────────
