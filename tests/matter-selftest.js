@@ -24,7 +24,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     id: "ac",
     thermostat: { localTemperature: 2600, occupiedCoolingSetpoint: 2200, occupiedHeatingSetpoint: 2000, systemMode: 3, controlSequenceOfOperation: 4, minSetpointDeadBand: 0 },
   });
-  const fan = await dev.add(FanDevice, { id: "fan", fanControl: { fanMode: 0, fanModeSequence: 2, percentSetting: 0, percentCurrent: 0 } });
+  const fan = await dev.add(FanDevice, { id: "fan", fanControl: { fanMode: 0, fanModeSequence: 0 /* 關／低／中／高（沒有「自動」，不用 Auto 功能） */, percentSetting: 0, percentCurrent: 0 } });
   await dev.start();
   const code = dev.state.commissioning.pairingCodes.manualPairingCode;
   console.log("device up, code", code);
@@ -50,4 +50,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await home.close();
   await dev.close();
   process.exit(0);
-})().catch((e) => fail(e.stack || e));
+})().catch((e) => {
+  // AggregateError（例如 "Behaviors have errors"）把裡面每一個原因都印出來
+  for (const x of e.errors || []) console.error(" -", x.message, x.cause?.message || "");
+  fail(e.stack || e);
+});
