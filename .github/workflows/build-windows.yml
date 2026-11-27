@@ -89,7 +89,12 @@ jobs:
         run: |
           $log = Join-Path $env:APPDATA 'Glass Widgets\debug.log'
           $p = Start-Process -FilePath 'dist\win-unpacked\Glass Widgets.exe' -PassThru
-          Start-Sleep 15
+          # 等到小組件畫面回報（最多 45 秒）；雲端電腦有時很慢，固定只等 15 秒會在回報前就被關掉
+          $deadline = (Get-Date).AddSeconds(45)
+          do {
+            Start-Sleep 2
+            $done = (Test-Path $log) -and ((Get-Content $log -Raw) -match 'host page')
+          } until ($done -or (Get-Date) -gt $deadline)
           Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           Get-Process 'Glass Widgets' -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not (Test-Path $log)) { throw 'debug.log was not written' }
