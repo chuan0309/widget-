@@ -735,6 +735,63 @@ WIDGETS.audio = {
   },
 };
 
+/* ───────── 家庭（Philips Hue）：像 iPhone「家庭」小工具，一格一個房間或燈，點一下開關 ───────── */
+store.home = null;
+let homeAt = 0;
+async function loadHome(force = false) {
+  const needed = [...instances.values()].some((i) => i.panes.has("home"));
+  if (!needed || paused || (!force && Date.now() - homeAt < 8000)) return;
+  homeAt = Date.now();
+  try { store.home = await api.homeGet(); } catch { store.home = { error: "讀取失敗" }; }
+  refresh("home");
+}
+setInterval(() => loadHome(), 10 * 1000); // 在 Hue App 或牆上開關改了，10 秒內跟著變
+api.onHomeChanged?.(() => loadHome(true));
+
+const HOME_TILES = { s: 4, m: 4, l: 8 };
+function homeItems(d) {
+  const p = d.prefs || {};
+  const order = p.order || [];
+  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e4 + (it.kind === "room" ? 0 : 1000) : i; };
+  return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
+}
+const homeStatus = (it) => it.reachable === false ? "沒有回應" : it.on ? (it.bri != null ? `開啟 · ${it.bri}%` : "開啟") : "關閉";
+
+WIDGETS.home = {
+  mount() { loadHome(true); },
+  tap(pane, inst, target) {
+    if (target.closest("[data-setup]")) return api.mgrOpen("home");
+    const t = target.closest("[data-hid]");
+    if (!t) return;
+    const on = t.dataset.on !== "1";
+    // 先在畫面上切換（感覺比較快），再真的送出；失敗的話下一次讀取會改回來
+    t.dataset.on = on ? "1" : "0";
+    t.classList.toggle("on", on);
+    const st = t.querySelector("small");
+    if (st) st.textContent = on ? "開啟" : "關閉";
+    const it = store.home?.items?.find((x) => x.id === t.dataset.hid);
+    if (it) it.on = on;
+    api.homeSet(t.dataset.hid, on).then(() => setTimeout(() => loadHome(true), 700));
+  },
+  render(pane, inst) {
+    const d = store.home;
+    if (!d) { setHTML(pane, `<div class="setup-msg"><small>讀取中…</small></div>`); loadHome(true); return; }
+    if (d.needSetup) {
+      setHTML(pane, `<button class="setup-msg" data-setup><span class="hm-ico big">${icon("home")}</span><p>連接 Philips Hue</p><small>${esc(d.error || "點這裡設定")}</small></button>`);
+      return;
+    }
+    if (d.error && !d.items) {
+      setHTML(pane, `<div class="setup-msg"><span class="hm-ico big">${icon("home")}</span><p>${esc(d.error)}</p><small>電腦和 Bridge 要在同一個網路</small></div>`);
+      return;
+    }
+    const list = homeItems(d).slice(0, HOME_TILES[inst.size] || 4);
+    if (!list.length) { setHTML(pane, `<button class="setup-msg" data-setup><small>沒有要顯示的燈，點這裡選</small></button>`); return; }
+    setHTML(pane, `<div class="hm hm-${inst.size}">${list.map((it) => `<button class="hm-tile ${it.on ? "on" : ""} ${it.reachable === false ? "dead" : ""}" data-hid="${esc(it.id)}" data-on="${it.on ? 1 : 0}" title="${esc(it.name)}">
+      <span class="hm-ico">${icon(it.kind === "room" ? "home" : "bulb")}</span>
+      <span class="hm-text"><b>${esc(it.name)}</b><small>${homeStatus(it)}</small></span></button>`).join("")}</div>`);
+  },
+};
+
 /* ───────── Google 日曆 ───────── */
 function evTime(ev) {
   if (ev.allDay) return "整天";

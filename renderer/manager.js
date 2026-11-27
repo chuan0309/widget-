@@ -36,6 +36,7 @@ function go(section) {
   if (section === "pinterest") loadPinterest();
   if (section === "calendar") loadGoogle();
   if (section === "audio") loadAudio();
+  if (section === "home") loadHue();
 }
 document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
 window.api.onGoto((section) => go(section));
@@ -49,6 +50,7 @@ const WIDGET_INFO = [
   { kind: "audio", name: "音訊輸出", icon: "speaker" },
   { kind: "calendar", name: "Google 日曆", icon: "calendar" },
   { kind: "pinterest", name: "Pinterest", icon: "pin" },
+  { kind: "home", name: "家庭（Hue）", icon: "home" },
 ];
 const SIZE_NAMES = { s: "小", m: "中", l: "大" };
 
@@ -684,3 +686,56 @@ $("phToken").addEventListener("click", async () => { renderPhone(await window.ap
 for (const b of document.querySelectorAll("[data-copy]")) b.addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($(b.dataset.copy).textContent); toast("已複製"); } catch { toast("複製失敗"); }
 });
+
+/* ───────── 智慧家庭：Philips Hue 配對、選要顯示的燈 ───────── */
+async function loadHue() {
+  const info = await window.api.hueInfo();
+  const box = $("hueBox");
+  $("hueItemsWrap").hidden = true;
+  if (!info.paired) {
+    box.innerHTML = `<div class="row"><span class="row-icon">${icon("home")}</span>
+        <span class="row-text"><b>連接 Hue Bridge</b><small id="hueMsg">先按「搜尋」找你家的 Bridge</small></span>
+        <button class="btn small" id="hueFind">搜尋</button></div>
+      <div class="row"><input class="grow" id="hueIp" placeholder="Bridge 的 IP，例如 192.168.1.20" spellcheck="false" />
+        <button class="btn small" id="huePair">配對</button></div>
+      <div class="row"><span class="row-text"><small>配對方法：先按一下 Hue Bridge 正中間的大圓形按鈕，再在 30 秒內按「配對」。</small></span></div>`;
+    $("hueFind").addEventListener("click", async () => {
+      $("hueMsg").textContent = "搜尋中…";
+      const list = await window.api.hueDiscover();
+      if (list.length) { $("hueIp").value = list[0].ip; $("hueMsg").textContent = `找到 Bridge：${list[0].ip}。按一下 Bridge 上的大按鈕，再按「配對」`; }
+      else $("hueMsg").textContent = "沒找到。可以在 Hue App →「設定」→「Hue Bridge」→「i」看 IP，手動填進下面";
+    });
+    $("huePair").addEventListener("click", async () => {
+      const ip = $("hueIp").value.trim();
+      $("huePair").disabled = true;
+      $("hueMsg").textContent = "配對中…還沒按 Bridge 的按鈕的話，現在按（30 秒內）";
+      const r = await window.api.huePair(ip);
+      $("huePair").disabled = false;
+      if (r.ok) { toast("Hue 配對成功"); loadHue(); }
+      else $("hueMsg").textContent = r.error;
+    });
+    return;
+  }
+  box.innerHTML = `<div class="row"><span class="row-icon blue">${icon("check_circle")}</span>
+      <span class="row-text"><b>已連接 Hue Bridge</b><small>${escapeHTML(info.ip)}</small></span>
+      <button class="btn small ghost" id="hueUnpair">${icon("logout")}解除配對</button></div>`;
+  $("hueUnpair").addEventListener("click", async () => { await window.api.hueUnpair(); toast("已解除配對"); loadHue(); });
+
+  const d = await window.api.homeGet();
+  $("hueItemsWrap").hidden = false;
+  if (!d.items) { $("hueItems").innerHTML = `<div class="row"><span class="row-text"><b class="err">${escapeHTML(d.error || "讀不到")}</b></span></div>`; return; }
+  const hidden = { ...(info.hidden || {}) };
+  $("hueItems").replaceChildren(...d.items.map((it) => {
+    const row = document.createElement("label");
+    row.className = "row";
+    row.innerHTML = `<span class="row-icon">${icon(it.kind === "room" ? "home" : "bulb")}</span>
+      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${it.kind === "room" ? `房間 · ${it.count} 盞燈` : "燈"}</small></span>
+      <input type="checkbox" class="switch" ${hidden[it.id] ? "" : "checked"} />`;
+    row.querySelector("input").addEventListener("change", async (e) => {
+      if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;
+      await window.api.huePrefs({ hidden });
+      toast(e.target.checked ? `會顯示「${it.name}」` : `不顯示「${it.name}」`);
+    });
+    return row;
+  }));
+}

@@ -25,6 +25,7 @@
       "google.js",
       "cwa.js",
       "phone-push.js",
+      "hue.js",
       "oauth.json",
       "helper.ps1",
       "locate.ps1",
