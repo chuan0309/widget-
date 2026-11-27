@@ -1077,8 +1077,9 @@ ipcMain.handle("home:adjust", async (_e, id, v = {}) => {
   if (id.startsWith("m")) return matterHome().set(id, {
     ...(typeof v.setpoint === "number" ? { setpoint: v.setpoint } : {}),
     ...(typeof v.pct === "number" ? { pct: v.pct } : {}),
-    ...([1, 3, 7, 8].includes(v.mode) ? { mode: v.mode } : {}),
+    ...([1, 3, 4, 7, 8].includes(v.mode) ? { mode: v.mode } : {}),
   });
+  if (v.color) return hue.setColor(id, v.color);
   return hue.setBri(id, Number(v.bri));
 });
 ipcMain.handle("matter:info", () => ({ paired: matterOn() }));

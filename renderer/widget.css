@@ -402,40 +402,44 @@ body.bg-light .hm-tile.on { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0
 .hm-temp { font-family: "Inter", "Noto Sans TC", "Segoe UI", sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
 .hm-tile.on .hm-temp { color: #000; }
 
-/* ───────── 家庭：長按跳出的控制面板 ───────── */
-.hm-pop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0); transition: background 0.2s; }
-.hm-pop.show { background: rgba(0, 0, 0, 0.18); }
-.hm-pop-card {
-  position: absolute; width: 260px; padding: 16px; border-radius: 28px; box-sizing: border-box;
-  display: flex; flex-direction: column; align-items: center; gap: 14px;
-  background: rgba(40, 40, 44, 0.92); color: #fff; backdrop-filter: blur(30px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.15);
-  transform: scale(0.85); opacity: 0; transition: transform 0.25s var(--ease-spring, ease), opacity 0.2s;
-  font-family: "Inter", "Noto Sans TC", "Segoe UI", sans-serif; user-select: none;
+/* ───────── 家庭：長按跳出的控制面板（照 iPhone「家庭」） ───────── */
+.hm-pop { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; background: rgba(0, 0, 0, 0); transition: background 0.22s; }
+.hm-pop.show { background: rgba(10, 10, 14, 0.5); backdrop-filter: blur(26px) saturate(1.2); }
+.hm-pop-box {
+  display: flex; flex-direction: column; align-items: center; gap: 22px; color: #fff; user-select: none;
+  font-family: "Inter", "Noto Sans TC", "Segoe UI", sans-serif;
+  transform: scale(0.9); opacity: 0; transition: transform 0.28s var(--ease-spring, ease), opacity 0.2s;
 }
-.hm-pop.show .hm-pop-card { transform: none; opacity: 1; }
-.hm-pop.light .hm-pop-card { background: rgba(255, 255, 255, 0.95); color: #000; }
-.hm-pop-head { width: 100%; display: flex; align-items: center; gap: 10px; }
-.hm-pop-head span:nth-child(2) { flex: 1; display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
-.hm-pop-head small { font-size: 12px; opacity: 0.6; }
-.hm-pop-head b { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hm-pop-ico svg { width: 26px; height: 26px; fill: #ffcc00; }
-.hm-pop-x { border: 0; background: rgba(127, 127, 127, 0.25); color: inherit; width: 28px; height: 28px; border-radius: 50%; font: inherit; font-size: 13px; cursor: pointer; }
-/* 亮度／風速：直立的大條，白色從下面填上來 */
-.hm-slider { position: relative; width: 96px; height: 210px; border-radius: 26px; overflow: hidden; background: rgba(127, 127, 127, 0.35); cursor: ns-resize; touch-action: none; }
-.hm-slider i { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; transition: height 0.08s; }
-.hm-pop.light .hm-slider i { background: #ffcc00; }
-.hm-slider .hm-val { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 17px; font-weight: 700; color: #000; mix-blend-mode: difference; filter: invert(1); }
-/* 冷氣：大大的設定溫度、－／＋、模式 */
-.hm-ac { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
-.hm-ac-temp { display: flex; align-items: center; gap: 14px; }
-.hm-ac-temp b { font-size: 52px; font-weight: 300; letter-spacing: -0.03em; min-width: 110px; text-align: center; }
-.hm-ac-temp button { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(127, 127, 127, 0.3); color: inherit; font: inherit; font-size: 22px; cursor: pointer; }
-.hm-ac-room { font-size: 12px; opacity: 0.6; min-height: 1em; }
-.hm-ac-modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; }
-.hm-ac-modes button { border: 0; border-radius: 14px; padding: 8px 0; background: rgba(127, 127, 127, 0.22); color: inherit; font: inherit; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
-.hm-ac-modes svg { width: 18px; height: 18px; fill: currentColor; }
-.hm-ac-modes button.on { background: #0a84ff; color: #fff; }
-.hm-pop.off .hm-ac-temp b, .hm-pop.off .hm-ac-modes { opacity: 0.4; }
-.hm-power { border: 0; border-radius: 16px; padding: 8px 18px; display: flex; align-items: center; gap: 8px; background: rgba(127, 127, 127, 0.3); color: inherit; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.hm-power svg { width: 18px; height: 18px; fill: currentColor; }
+.hm-pop.show .hm-pop-box { transform: none; opacity: 1; }
+.hm-pop-title { display: flex; flex-direction: column; align-items: center; gap: 4px; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+.hm-pop-title b { font-size: 26px; font-weight: 700; }
+.hm-pop-title small { font-size: 15px; font-weight: 600; opacity: 0.85; }
+/* 燈／電扇：大圓角條，顏色從下往上填 */
+.hm-pill { --c: #ffe2c0; position: relative; width: 120px; height: 300px; border-radius: 34px; overflow: hidden; background: rgba(120, 120, 128, 0.45); cursor: ns-resize; touch-action: none; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); }
+.hm-pill i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); transition: height 0.08s, background 0.3s; }
+.hm-pill-ico { position: absolute; left: 0; right: 0; bottom: 22px; display: grid; place-items: center; }
+.hm-pill-ico svg { width: 30px; height: 30px; fill: #fff; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35)); }
+.hm-swatches { display: flex; gap: 16px; }
+.hm-swatches button, .hm-rainbow { width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); cursor: pointer; padding: 0; box-sizing: border-box; }
+.hm-swatches button:hover { transform: scale(1.08); }
+.hm-rainbow { position: relative; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); border: 0; }
+.hm-rainbow::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgba(40, 40, 44, 0.9); }
+.hm-rainbow input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.hm-power { border: 0; border-radius: 18px; padding: 9px 26px; background: rgba(120, 120, 128, 0.45); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+/* 冷氣：270° 弧形刻度盤 */
+.hm-dial { position: relative; width: 300px; height: 300px; }
+.hm-dial svg { width: 100%; height: 100%; cursor: grab; touch-action: none; overflow: visible; }
+.hm-dial-track { fill: none; stroke: rgba(120, 120, 128, 0.45); stroke-width: 34; stroke-linecap: round; }
+.hm-dial-fill { fill: none; stroke-width: 34; stroke-linecap: round; transition: stroke 0.3s; }
+.hm-dial-knob { fill: #fff; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35)); }
+.hm-dial-dot { fill: rgba(0, 0, 0, 0.18); }
+.hm-pop.off .hm-dial-fill { stroke: rgba(160, 160, 170, 0.7) !important; }
+.hm-dial-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.hm-verb { font-size: 17px; font-weight: 700; opacity: 0.6; }
+.hm-big { font-size: 66px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+.hm-now { font-size: 15px; font-weight: 600; margin-top: 8px; }
+.hm-mode {
+  appearance: none; border: 0; border-radius: 30px; padding: 14px 70px; text-align: center; text-align-last: center;
+  background: rgba(120, 120, 128, 0.45); color: #fff; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.hm-mode option { background: #2c2c2e; color: #fff; }

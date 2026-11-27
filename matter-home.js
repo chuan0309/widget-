@@ -132,7 +132,9 @@ function createMatterHome({ storageDir, log = () => {} }) {
             const on = o ? await o.getOnOffAttribute() : mode !== 0;
             const local = await t.getLocalTemperatureAttribute().catch(() => null);
             const cool = await t.getOccupiedCoolingSetpointAttribute().catch(() => null);
-            items.push({ ...base, kind: "ac", on: !!on, mode, temp: local != null ? local / 100 : null, setpoint: cool != null ? cool / 100 : null });
+            const heat = await t.getOccupiedHeatingSetpointAttribute().catch(() => null);
+            const sp = mode === 4 ? heat ?? cool : cool ?? heat; // 暖氣看暖氣的設定溫度
+            items.push({ ...base, kind: "ac", on: !!on, mode, temp: local != null ? local / 100 : null, setpoint: sp != null ? sp / 100 : null });
           } else if (f) {
             const pct = await f.getPercentSettingAttribute().catch(() => null);
             const fm = await f.getFanModeAttribute();
@@ -169,7 +171,7 @@ function createMatterHome({ storageDir, log = () => {} }) {
         else if (t) await t.setSystemModeAttribute(action.on ? (lastMode.get(id) || 3) : 0);
         else if (f) await f.setFanModeAttribute(action.on ? 3 /* 高 */ : 0);
       }
-      // 模式：1 自動、3 冷氣、7 送風、8 除濕（Matter 溫控器的 SystemMode）
+      // 模式：1 自動、3 冷氣、4 暖氣、7 送風、8 除濕（Matter 溫控器的 SystemMode）
       if (typeof action.mode === "number" && t) {
         await t.setSystemModeAttribute(action.mode);
         lastMode.set(id, action.mode);
@@ -177,7 +179,9 @@ function createMatterHome({ storageDir, log = () => {} }) {
       }
       if (typeof action.setpoint === "number" && t) {
         const v = Math.round(Math.min(30, Math.max(16, action.setpoint)) * 100);
-        await t.setOccupiedCoolingSetpointAttribute(v);
+        const mode = action.mode ?? lastMode.get(id);
+        if (mode === 4) await t.setOccupiedHeatingSetpointAttribute(v);
+        else await t.setOccupiedCoolingSetpointAttribute(v);
       }
       if (typeof action.pct === "number" && f) {
         await f.setPercentSettingAttribute(Math.round(Math.min(100, Math.max(0, action.pct))));
