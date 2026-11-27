@@ -100,7 +100,32 @@ function createMatterHome({ storageDir, log = () => {} }) {
   }
 
   const cl = (ep, cluster) => ep.getClusterClient(cluster.Complete ?? cluster.Cluster ?? cluster);
-  const all = (n) => [...n.parts.values()].filter((ep) => ep.getNumber?.() !== 0);
+  // 所有 endpoint（包含橋接器底下的子設備）：Tapo 這類「橋接器」會把冷氣、電扇掛在下一層，
+  // 只看第一層會只看到橋接器本身
+  const all = (n) => {
+    const seen = new Map();
+    const walk = (ep) => {
+      if (!ep) return;
+      const num = ep.getNumber?.();
+      if (num != null && seen.has(num)) return;
+      if (num != null) seen.set(num, ep);
+      for (const c of ep.getChildEndpoints?.() || []) walk(c);
+      for (const c of ep.parts?.values?.() || []) walk(c);
+    };
+    for (const ep of n.parts?.values?.() || []) walk(ep);
+    for (const ep of n.getDevices?.() || []) walk(ep);
+    seen.delete(0);
+    return [...seen.values()];
+  };
+  const logged = new Set();
+  // 第一次讀到這個設備時，把結構寫進 debug.log（之後有問題比較好查）
+  function logStructure(id, n) {
+    if (logged.has(String(id))) return;
+    logged.add(String(id));
+    try {
+      log("matter node", String(id), all(n).map((ep) => `${ep.getNumber()}:${ep.getDeviceTypes?.().map((d) => d.name || d.code).join("+")}[${ep.getAllClusterClients?.().map((c) => c.name).join(",")}]`).join(" "));
+    } catch (e) { log("matter node structure failed", e.message); }
+  }
 
   async function nameOf(ep, n) {
     const { BridgedDeviceBasicInformation } = lib().clusters;
@@ -124,6 +149,7 @@ function createMatterHome({ storageDir, log = () => {} }) {
       let n;
       try { n = await node(id); }
       catch (e) { items.push({ id: `m${id}`, kind: "switch", name: "Matter 設備", room: "沒有回應", on: false, reachable: false }); continue; }
+      logStructure(id, n);
       const eps = all(n).filter((ep) => cl(ep, Thermostat) || cl(ep, FanControl) || cl(ep, OnOff));
       // 設備名稱（例如「AC」）只在這個設備只有一個功能時用，不然冷氣和電扇會叫同一個名字
       const nodeLabel = eps.length === 1 ? n.basicInformation?.nodeLabel || null : null;
@@ -170,7 +196,7 @@ function createMatterHome({ storageDir, log = () => {} }) {
       const { nodeId, ep } = endpointOf(id);
       const { OnOff, Thermostat, FanControl, types } = { ...lib().clusters, types: lib().types };
       const n = await node(BigInt(nodeId));
-      const e = n.parts.get(ep) || all(n).find((x) => x.getNumber() === ep);
+      const e = all(n).find((x) => x.getNumber() === ep);
       if (!e) throw new Error("找不到這個設備");
       const o = cl(e, OnOff), t = cl(e, Thermostat), f = cl(e, FanControl);
       if ("on" in action) {

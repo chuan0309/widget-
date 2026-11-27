@@ -3,7 +3,9 @@
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
-const { ServerNode, Environment } = require("@matter/main");
+const { ServerNode, Environment, Endpoint } = require("@matter/main");
+const { AggregatorEndpoint } = require("@matter/main/endpoints");
+const { BridgedDeviceBasicInformationServer } = require("@matter/main/behaviors");
 const { RoomAirConditionerDevice, FanDevice } = require("@matter/main/devices");
 const { ThermostatServer } = require("@matter/main/behaviors");
 const { createMatterHome } = require("../matter-home");
@@ -25,6 +27,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     thermostat: { localTemperature: 2600, occupiedCoolingSetpoint: 2200, occupiedHeatingSetpoint: 2000, systemMode: 3, controlSequenceOfOperation: 4, minSetpointDeadBand: 0 },
   });
   const fan = await dev.add(FanDevice, { id: "fan", fanControl: { fanMode: 0, fanModeSequence: 0 /* 關／低／中／高（沒有「自動」，不用 Auto 功能） */, percentSetting: 0, percentCurrent: 0 } });
+  // 像 Tapo 的橋接器：冷氣掛在 Aggregator 底下，名字放在 BridgedDeviceBasicInformation
+  const bridge = await dev.add(AggregatorEndpoint, { id: "bridge" });
+  const bridgedAc = new Endpoint(RoomAirConditionerDevice.with(BridgedDeviceBasicInformationServer, ThermostatServer.with("Cooling", "Heating", "AutoMode")), {
+    id: "bridged-ac",
+    bridgedDeviceBasicInformation: { nodeLabel: "Bedroom AC", reachable: true },
+    thermostat: { localTemperature: 2700, occupiedCoolingSetpoint: 2400, occupiedHeatingSetpoint: 2000, systemMode: 3, controlSequenceOfOperation: 4, minSetpointDeadBand: 0 },
+  });
+  await bridge.add(bridgedAc);
   await dev.start();
   const code = dev.state.commissioning.pairingCodes.manualPairingCode;
   console.log("device up, code", code);
@@ -34,10 +44,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!r.ok) fail("pair: " + r.error);
   let items = await home.state();
   console.log("state", JSON.stringify(items));
-  const a = items.find((i) => i.kind === "ac"), f = items.find((i) => i.kind === "fan");
+  const a = items.find((i) => i.kind === "ac" && i.name !== "Bedroom AC"), f = items.find((i) => i.kind === "fan");
   if (!a || !f) fail("ac/fan not found");
   if (a.setpoint !== 22) fail("setpoint " + a.setpoint);
   if (/^MA-/.test(a.name) || /^MA-/.test(f.name) || a.name === f.name) fail("bad names: " + a.name + " / " + f.name);
+  // 橋接器底下的冷氣也要找得到，而且名字用 BridgedDeviceBasicInformation 的
+  const b = items.find((i) => i.kind === "ac" && i.name === "Bedroom AC");
+  if (!b) fail("bridged AC not found: " + JSON.stringify(items.map((i) => i.name)));
+  await home.set(b.id, { setpoint: 21 }); await sleep(500);
+  if (bridgedAc.state.thermostat.occupiedCoolingSetpoint !== 2100) fail("bridged setpoint " + bridgedAc.state.thermostat.occupiedCoolingSetpoint);
 
   await home.set(a.id, { on: false }); await sleep(500);
   if (ac.state.onOff.onOff !== false) fail("ac off");
