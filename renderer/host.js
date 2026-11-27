@@ -760,7 +760,7 @@ function homeItems(d) {
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
 // 方塊：左上角圖示，下面兩行「房間／名稱」（照 iPhone「家庭」小工具）
-const homeIcon = (it) => icon(it.smart ? "schedule" : { room: "home", scene: "scene" }[it.kind] || "bulb");
+const homeIcon = (it) => icon(homeIconName(it, store.home?.prefs?.icons));
 const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.room || "";
 const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
 

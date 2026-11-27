@@ -726,28 +726,49 @@ async function loadHue() {
   if (!d.items) { $("hueItems").innerHTML = `<div class="row"><span class="row-text"><b class="err">${escapeHTML(d.error || "讀不到")}</b></span></div>`; return; }
   const hidden = { ...(info.hidden || {}) };
   const sceneMode = { ...(info.sceneMode || {}) };
-  const MODES = [["static", "靜態", null], ["slow", "動態・慢", 0.25], ["mid", "動態・中", 0.55], ["fast", "動態・快", 0.9]];
-  const modeKey = (m) => (m?.mode !== "dynamic" ? "static" : m.speed < 0.4 ? "slow" : m.speed < 0.75 ? "mid" : "fast");
-  $("hueItems").replaceChildren(...d.items.map((it) => {
+  const icons = { ...(info.icons || {}) };
+  const MODES = [["auto", "照 Hue App", null], ["static", "靜態", null], ["slow", "動態・慢", 0.25], ["mid", "動態・中", 0.55], ["fast", "動態・快", 0.9]];
+  const modeKey = (m) => (!m || m.mode === "auto" ? "auto" : m.mode !== "dynamic" ? "static" : m.speed < 0.4 ? "slow" : m.speed < 0.75 ? "mid" : "fast");
+  // 全部隱藏／全部顯示（場景很多時，先全部藏起來再打開想要的幾個）
+  const bulk = document.createElement("div");
+  bulk.className = "row";
+  bulk.innerHTML = `<span class="row-text"><b>一次設定</b><small>先「全部隱藏」，再把想放在小組件上的打開</small></span>
+    <button class="btn small ghost" data-all="hide">全部隱藏</button><button class="btn small ghost" data-all="show">全部顯示</button>`;
+  bulk.querySelectorAll("[data-all]").forEach((b) => b.addEventListener("click", async () => {
+    const hide = b.dataset.all === "hide";
+    for (const it of d.items) if (hide) hidden[it.id] = true; else delete hidden[it.id];
+    await window.api.huePrefs({ hidden });
+    toast(hide ? "全部隱藏了，打開想要的就好" : "全部顯示");
+    loadHue();
+  }));
+  $("hueItems").replaceChildren(bulk, ...d.items.map((it) => {
     const row = document.createElement("div");
     row.className = "row";
     const sub = it.kind === "room" ? `房間 · ${it.count} 盞燈`
       : it.kind === "scene" && it.smart ? `智慧場景 · ${escapeHTML(it.room)} · 照時間自動變化（時段在 Hue App 設定）`
-      : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)}${it.canDynamic ? "" : " · 這個場景只有靜態"}`
+      : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)} · Hue App：${it.autoDynamic ? "自動播放（動態）" : "靜態"}${it.canDynamic ? "" : "（只有靜態）"}`
       : it.kind === "off" ? "一鍵關掉全部的燈" : "燈";
     const modeSel = it.kind === "scene" && !it.smart && it.canDynamic
       ? `<select class="select small">${MODES.map(([k, n]) => `<option value="${k}" ${modeKey(sceneMode[it.id]) === k ? "selected" : ""}>${n}</option>`).join("")}</select>` : "";
-    row.innerHTML = `<span class="row-icon">${icon({ room: "home", scene: it.smart ? "schedule" : "scene", off: "bulb" }[it.kind] || "bulb")}</span>
+    const iconSel = `<select class="select small" title="圖示">${HOME_ICON_CHOICES.map(([k, n]) => `<option value="${k}" ${(icons[it.id] || "") === k ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    row.innerHTML = `<span class="row-icon">${icon(homeIconName(it, icons))}</span>
       <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${sub}</small></span>
-      ${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
+      ${iconSel}${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
     row.querySelector("input").addEventListener("change", async (e) => {
       if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;
       await window.api.huePrefs({ hidden });
       toast(e.target.checked ? `會顯示「${it.name}」` : `不顯示「${it.name}」`);
     });
-    row.querySelector("select")?.addEventListener("change", async (e) => {
-      const [, label, speed] = MODES.find(([k]) => k === e.target.value);
-      sceneMode[it.id] = speed == null ? { mode: "static" } : { mode: "dynamic", speed };
+    const [iconBox, modeBox] = row.querySelectorAll("select");
+    iconBox.addEventListener("change", async (e) => {
+      if (e.target.value) icons[it.id] = e.target.value; else delete icons[it.id];
+      row.querySelector(".row-icon").innerHTML = icon(homeIconName(it, icons));
+      await window.api.huePrefs({ icons });
+      toast(`「${it.name}」換圖示了`);
+    });
+    modeBox?.addEventListener("change", async (e) => {
+      const [k, label, speed] = MODES.find(([key]) => key === e.target.value);
+      sceneMode[it.id] = k === "auto" ? { mode: "auto" } : speed == null ? { mode: "static" } : { mode: "dynamic", speed };
       await window.api.huePrefs({ sceneMode });
       toast(`「${it.name}」改成${label}（下次點這個場景時套用）`);
     });

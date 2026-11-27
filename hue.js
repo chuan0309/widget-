@@ -83,6 +83,7 @@ const v2Color = (a = {}) => {
 };
 
 function createHue(settings, saveSettings, log = () => {}) {
+  const sceneAuto = new Map(); // 場景 id → Hue App 裡有沒有開「自動播放」（套用時照這個）
   const sceneColors = new Map(); // 場景 id → { at, colors }（場景很少改，一小時讀一次）
   const H = () => (settings.hue ||= { ip: "", key: "", hidden: {}, order: [] });
   const base = () => `http://${H().ip}/api/${unseal(H().key)}`;
@@ -155,7 +156,8 @@ function createHue(settings, saveSettings, log = () => {}) {
         if (orphan(x.group)) continue;
         // 有色盤的場景才能「動態」（顏色在色盤裡流動）
         const canDynamic = (x.palette?.color?.length || 0) + (x.palette?.color_temperature?.length || 0) > 0;
-        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, colors: colorsOf(x) });
+        sceneAuto.set("v" + x.id, !!x.auto_dynamic);
+        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, autoDynamic: !!x.auto_dynamic, colors: colorsOf(x) });
       }
       return items;
     } catch (e) {
@@ -234,10 +236,11 @@ function createHue(settings, saveSettings, log = () => {}) {
           if (r?.errors?.length) log("hue smart scene error", r.errors[0].description);
           return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
         }
-        // 一般場景：照使用者在管理程式選的「靜態／動態（慢、中、快）」套用
-        const pref = H().sceneMode?.[id] || {};
-        const dynamic = pref.mode === "dynamic";
-        if (dynamic && typeof pref.speed === "number") await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { speed: pref.speed }).catch(() => {});
+        // 一般場景：預設照 Hue App 的設定（有開「自動播放」就動態，速度、亮度用場景自己存的）；
+        // 使用者在管理程式另外選了靜態／動態（慢、中、快）才照那個
+        const pref = H().sceneMode?.[id] || { mode: "auto" };
+        const dynamic = pref.mode === "dynamic" || (pref.mode === "auto" && sceneAuto.get(id));
+        if (pref.mode === "dynamic" && typeof pref.speed === "number") await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { speed: pref.speed }).catch(() => {});
         const r = await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { recall: { action: dynamic ? "dynamic_palette" : "active" } });
         if (r?.errors?.length) log("hue scene error", r.errors[0].description);
         return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
@@ -276,13 +279,16 @@ function createHue(settings, saveSettings, log = () => {}) {
 
   return {
     discover, pair, unpair, state, set, setBri,
-    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {} }),
-    setPrefs({ hidden, order, sceneMode } = {}) {
+    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {}, icons: H().icons || {} }),
+    setPrefs({ hidden, order, sceneMode, icons } = {}) {
+      if (icons && typeof icons === "object") {
+        H().icons = Object.fromEntries(Object.entries(icons).filter(([, v]) => /^[a-z_]{1,20}$/.test(v)).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), v]));
+      }
       // id 最長是 "v" + 36 字的 UUID，以前切到 20 字會對不上（藏不起來）
       if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 64), true]));
       if (sceneMode && typeof sceneMode === "object") {
         H().sceneMode = Object.fromEntries(Object.entries(sceneMode).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), {
-          mode: v?.mode === "dynamic" ? "dynamic" : "static",
+          mode: ["dynamic", "static"].includes(v?.mode) ? v.mode : "auto",
           speed: Math.min(1, Math.max(0, Number(v?.speed) || 0.5)),
         }]));
       }

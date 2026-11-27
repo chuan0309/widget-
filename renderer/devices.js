@@ -38,3 +38,19 @@ function deviceType(name = "", cod = null) {
 function deviceIcon(type) {
   return icon(type);
 }
+
+// 家庭小組件的圖示：可以自己選；沒選就照名稱挑（舒睡→月亮、春花→花、銀河→星星、極光→波浪…）
+const HOME_ICON_CHOICES = [["", "自動"], ["scene", "星光"], ["moon", "月亮"], ["star", "星星"], ["sun", "太陽"], ["flower", "花"], ["wave", "極光／波浪"], ["heart", "愛心"], ["bed", "床"], ["bulb", "燈泡"], ["home", "房子"], ["schedule", "時鐘"]];
+function homeAutoIcon(it) {
+  if (it.kind === "room") return "home";
+  if (it.kind === "light" || it.kind === "off") return "bulb";
+  const n = String(it.name || "");
+  if (/睡|夜|晚|月|sleep|night|moon|relax|放鬆/i.test(n)) return "moon";
+  if (/花|春|櫻|flower|blossom|spring/i.test(n)) return "flower";
+  if (/銀河|星|galaxy|star/i.test(n)) return "star";
+  if (/極光|aurora|海|浪|漂|ocean|wave/i.test(n)) return "wave";
+  if (/日|陽|晨|黃金|sun|energize|活力/i.test(n)) return "sun";
+  if (/愛|心|love|romance/i.test(n)) return "heart";
+  return it.smart ? "schedule" : "scene";
+}
+const homeIconName = (it, icons) => icons?.[it.id] || homeAutoIcon(it);
