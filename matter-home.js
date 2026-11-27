@@ -169,6 +169,12 @@ function createMatterHome({ storageDir, log = () => {} }) {
         else if (t) await t.setSystemModeAttribute(action.on ? (lastMode.get(id) || 3) : 0);
         else if (f) await f.setFanModeAttribute(action.on ? 3 /* 高 */ : 0);
       }
+      // 模式：1 自動、3 冷氣、7 送風、8 除濕（Matter 溫控器的 SystemMode）
+      if (typeof action.mode === "number" && t) {
+        await t.setSystemModeAttribute(action.mode);
+        lastMode.set(id, action.mode);
+        if (o && !("on" in action)) await o.on();
+      }
       if (typeof action.setpoint === "number" && t) {
         const v = Math.round(Math.min(30, Math.max(16, action.setpoint)) * 100);
         await t.setOccupiedCoolingSetpointAttribute(v);
