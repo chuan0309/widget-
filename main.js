@@ -1053,7 +1053,10 @@ ipcMain.on("popup:close", () => { clearTimeout(popupTimer); popupDevice = null; 
 const hue = createHue(settings, saveSettings, log);
 // Matter（Tapo 冷氣、電扇…）：配對過才啟動（matter.js 很大，沒用到就不要載）
 let matter = null;
-const matterHome = () => (matter ||= createMatterHome({ storageDir: path.join(app.getPath("userData"), "matter"), log }));
+// 設備狀態變了（Matter 訂閱、Hue 事件）→ 請家庭小組件馬上重讀
+let homeChangedTimer = null;
+const homeChanged = () => { clearTimeout(homeChangedTimer); homeChangedTimer = setTimeout(() => sendToKind("home", "home:changed"), 200); };
+const matterHome = () => (matter ||= createMatterHome({ storageDir: path.join(app.getPath("userData"), "matter"), log, onChange: homeChanged }));
 const matterOn = () => !!settings.matter?.paired;
 async function matterItems() {
   if (!matterOn()) return [];
@@ -1100,10 +1103,10 @@ ipcMain.handle("hue:info", () => hue.info());
 ipcMain.handle("hue:discover", () => hue.discover());
 ipcMain.handle("hue:pair", async (_e, ip) => {
   const r = await hue.pair(String(ip || "").trim());
-  if (r.ok) sendToKind("home", "home:changed");
+  if (r.ok) { sendToKind("home", "home:changed"); hue.watch(homeChanged); }
   return r;
 });
-ipcMain.handle("hue:unpair", () => { hue.unpair(); sendToKind("home", "home:changed"); return hue.info(); });
+ipcMain.handle("hue:unpair", () => { hue.stopWatch(); hue.unpair(); sendToKind("home", "home:changed"); return hue.info(); });
 ipcMain.handle("hue:prefs", (_e, prefs) => { hue.setPrefs(prefs || {}); sendToKind("home", "home:changed"); return hue.info(); });
 
 /* ───────── 遊戲模式：玩遊戲時把小組件整個關掉，省記憶體 ───────── */
@@ -1184,6 +1187,8 @@ if (!app.requestSingleInstanceLock()) {
     setupUpdater();
     startAutoLocate();
     startGameWatch();
+    hue.watch(homeChanged);                 // Hue 即時同步
+    if (matterOn()) setTimeout(matterItems, 3000); // Matter：先連上、開始訂閱（手機改了也會馬上知道）
     ensurePopup(); // 先把通知視窗建好
     // 鎖定螢幕、睡眠時小組件停止更新，省電
     powerMonitor.on("lock-screen", () => setPaused(true));

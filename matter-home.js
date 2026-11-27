@@ -8,11 +8,13 @@ const path = require("path");
 
 const KIND_ORDER = { ac: 0, fan: 1, switch: 2 };
 
-function createMatterHome({ storageDir, log = () => {} }) {
+function createMatterHome({ storageDir, log = () => {}, onChange = () => {} }) {
   let M = null;           // 延後載入 matter.js（很大，用到才載）
   let controller = null;
   let starting = null;
   const nodes = new Map(); // nodeId(string) → PairedNode
+  let changeTimer = null;
+  const changed = () => { clearTimeout(changeTimer); changeTimer = setTimeout(onChange, 300); };
   const lastMode = new Map(); // 冷氣上次的模式（關掉再開時回到這個）
 
   function lib() {
@@ -90,7 +92,8 @@ function createMatterHome({ storageDir, log = () => {} }) {
       nodes.set(key, n);
     }
     if (!n.initialized) {
-      n.connect();
+      // 設備（或手機）改了狀態，訂閱會馬上通知；收到就請小組件重讀
+      n.connect({ attributeChangedCallback: () => changed() });
       await Promise.race([
         new Promise((r) => n.events.initialized.once(r)),
         new Promise((_, rej) => setTimeout(() => rej(new Error("設備沒有回應")), 20000)),
@@ -141,6 +144,8 @@ function createMatterHome({ storageDir, log = () => {} }) {
   const KIND_NAMES = { ac: "冷氣", fan: "電扇", switch: "開關" };
 
   // 所有配對過的設備 → 小組件方塊
+  // 狀態一律直接問設備（true＝不要用快取）：以前讀到快取裡的舊值，關掉之後還顯示開著，
+  // 再點就一直送「關閉」，看起來像沒反應
   async function state() {
     const c = await start();
     const { OnOff, Thermostat, FanControl } = lib().clusters;
@@ -160,21 +165,21 @@ function createMatterHome({ storageDir, log = () => {} }) {
         const base = { id: `m${id}-${ep.getNumber()}`, name: (await nameOf(ep, n)) || nodeLabel || KIND_NAMES[kind], room: "", reachable: true };
         try {
           if (t) {
-            const mode = await t.getSystemModeAttribute();
+            const mode = await t.getSystemModeAttribute(true);
             if (mode) lastMode.set(base.id, mode);
-            const on = o ? await o.getOnOffAttribute() : mode !== 0;
-            const local = await t.getLocalTemperatureAttribute().catch(() => null);
-            const cool = await t.getOccupiedCoolingSetpointAttribute().catch(() => null);
-            const heat = await t.getOccupiedHeatingSetpointAttribute().catch(() => null);
+            const on = o ? await o.getOnOffAttribute(true) : mode !== 0;
+            const local = await t.getLocalTemperatureAttribute(true).catch(() => null);
+            const cool = await t.getOccupiedCoolingSetpointAttribute(true).catch(() => null);
+            const heat = await t.getOccupiedHeatingSetpointAttribute(true).catch(() => null);
             const sp = mode === 4 ? heat ?? cool : cool ?? heat; // 暖氣看暖氣的設定溫度
             items.push({ ...base, kind: "ac", on: !!on, mode, temp: local != null ? local / 100 : null, setpoint: sp != null ? sp / 100 : null });
           } else if (f) {
-            const pct = await f.getPercentSettingAttribute().catch(() => null);
-            const fm = await f.getFanModeAttribute();
-            const on = o ? await o.getOnOffAttribute() : fm !== 0;
+            const pct = await f.getPercentSettingAttribute(true).catch(() => null);
+            const fm = await f.getFanModeAttribute(true);
+            const on = o ? await o.getOnOffAttribute(true) : fm !== 0;
             items.push({ ...base, kind: "fan", on: !!on, pct: pct ?? null });
           } else {
-            items.push({ ...base, kind: "switch", on: !!(await o.getOnOffAttribute()) });
+            items.push({ ...base, kind: "switch", on: !!(await o.getOnOffAttribute(true)) });
           }
         } catch (e) {
           items.push({ ...base, kind: t ? "ac" : f ? "fan" : "switch", on: false, reachable: false });

@@ -306,7 +306,41 @@ function createHue(settings, saveSettings, log = () => {}) {
     } catch { return { error: "連不到 Hue Bridge" }; }
   }
 
+  // 即時同步：聽 Bridge 的事件（CLIP v2 eventstream），在 Hue App、手機、牆上開關改了就馬上通知
+  let events = null, eventsRetry = null;
+  function watch(onChange) {
+    stopWatch();
+    if (!paired()) return;
+    let timer = null;
+    const fire = () => { clearTimeout(timer); timer = setTimeout(onChange, 250); };
+    const req = https.request({
+      host: H().ip, port: 443, path: "/eventstream/clip/v2", method: "GET", rejectUnauthorized: false,
+      headers: { "hue-application-key": unseal(H().key), Accept: "text/event-stream" },
+    }, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return retry(); }
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { if (/\bdata:/.test(chunk)) fire(); });
+      res.on("end", retry);
+      res.on("error", retry);
+    });
+    req.on("error", retry);
+    req.end();
+    events = req;
+    function retry() {
+      if (events !== req) return;
+      events = null;
+      clearTimeout(eventsRetry);
+      eventsRetry = setTimeout(() => watch(onChange), 10000); // 斷了 10 秒後重連（Bridge 太舊沒有事件就一直靠每 10 秒讀一次）
+    }
+  }
+  function stopWatch() {
+    clearTimeout(eventsRetry);
+    const r = events; events = null;
+    try { r?.destroy(); } catch {}
+  }
+
   return {
+    watch, stopWatch,
     discover, pair, unpair, state, set, setBri, setColor,
     info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {}, icons: H().icons || {} }),
     setPrefs({ hidden, order, sceneMode, icons } = {}) {
