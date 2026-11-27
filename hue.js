@@ -143,12 +143,16 @@ function createHue(settings, saveSettings, log = () => {}) {
       const byId = new Map(sc.data.map((x) => [x.id, x]));
       const items = [];
       // 智慧場景（自然光、大自然的色彩…）：照時間自動換；顏色拿它裡面各時段場景的顏色
+      // 不屬於任何房間／區域的場景（Hue 內部用的、或房間刪掉後留下的）Hue App 不會顯示，這裡也不要
+      const orphan = (g) => names.size > 0 && !names.has(g?.rid);
       for (const z of smart.data || []) {
+        if (orphan(z.group)) continue;
         const targets = (z.week_timeslots || []).flatMap((w) => (w.timeslots || []).map((t) => t.target?.rid)).filter(Boolean);
         const cols = [...new Set(targets.flatMap((rid) => (byId.get(rid) ? colorsOf(byId.get(rid)) : [])))].slice(0, 3);
         items.push({ id: "z" + z.id, kind: "scene", smart: true, name: z.metadata?.name || "智慧場景", room: names.get(z.group?.rid) || "Hue", on: z.state === "active", colors: cols });
       }
       for (const x of sc.data) {
+        if (orphan(x.group)) continue;
         // 有色盤的場景才能「動態」（顏色在色盤裡流動）
         const canDynamic = (x.palette?.color?.length || 0) + (x.palette?.color_temperature?.length || 0) > 0;
         items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, colors: colorsOf(x) });
@@ -227,6 +231,7 @@ function createHue(settings, saveSettings, log = () => {}) {
         const key = unseal(H().key);
         if (vm[1] === "z") {
           const r = await v2call(H().ip, key, `smart_scene/${vm[2]}`, "PUT", { recall: { action: "activate" } });
+          if (r?.errors?.length) log("hue smart scene error", r.errors[0].description);
           return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
         }
         // 一般場景：照使用者在管理程式選的「靜態／動態（慢、中、快）」套用
@@ -234,6 +239,7 @@ function createHue(settings, saveSettings, log = () => {}) {
         const dynamic = pref.mode === "dynamic";
         if (dynamic && typeof pref.speed === "number") await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { speed: pref.speed }).catch(() => {});
         const r = await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { recall: { action: dynamic ? "dynamic_palette" : "active" } });
+        if (r?.errors?.length) log("hue scene error", r.errors[0].description);
         return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
       } catch { return { error: "連不到 Hue Bridge" }; }
     }

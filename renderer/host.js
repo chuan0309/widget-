@@ -760,7 +760,7 @@ function homeItems(d) {
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
 // 方塊：左上角圖示，下面兩行「房間／名稱」（照 iPhone「家庭」小工具）
-const homeIcon = (it) => icon({ room: "home", scene: "scene", off: "bulb" }[it.kind] || (it.kind === "scene" && it.smart ? "schedule" : "bulb"));
+const homeIcon = (it) => icon(it.smart ? "schedule" : { room: "home", scene: "scene" }[it.kind] || "bulb");
 const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.room || "";
 const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
 
@@ -830,8 +830,8 @@ WIDGETS.home = {
       const sub = st?.textContent;
       if (st) st.textContent = "套用中…";
       api.homeSet(t.dataset.hid, true).then((r) => {
-        if (st) st.textContent = r?.error ? "失敗" : "已套用";
-        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, 1500);
+        if (st) st.textContent = r?.error ? `失敗：${r.error}` : "已套用";
+        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, r?.error ? 4000 : 1500);
       });
       return;
     }
