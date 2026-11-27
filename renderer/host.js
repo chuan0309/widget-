@@ -769,7 +769,7 @@ function homeItems(d) {
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
 // 方塊：左上角圖示，下面兩行「房間／名稱」（照 iPhone「家庭」小工具）
-const homeIcon = (it) => icon(homeIconName(it, store.home?.prefs?.icons));
+const homeIcon = (it) => homeIconHTML(homeIconName(it, store.home?.prefs?.icons));
 const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.kind === "ac" && !it.on ? "關閉" : it.kind === "fan" && it.on && it.pct ? `風速 ${it.pct}%` : it.room || "";
 const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
 
@@ -995,9 +995,48 @@ WIDGETS.home = {
       p.spec.apply(p.it, p.cur);
       api.homeAdjust(p.it.id, p.spec.send(p.cur)).finally(() => setTimeout(() => { homeAdjusting = false; p.t.classList.remove("adjust"); loadHome(true); }, 500));
     };
+    // 按住 Alt 拖方塊：換順序（放開就記住）
+    let reorder = null;
     pane.addEventListener("pointerdown", (e) => {
       const t = e.target.closest("[data-hid]");
-      if (!t || e.button !== 0) return;
+      if (!t || e.button !== 0 || !e.altKey) return;
+      e.stopImmediatePropagation();
+      reorder = { t, id: e.pointerId, moved: false };
+      t.setPointerCapture?.(e.pointerId);
+      t.classList.add("lifting");
+      homeAdjusting = true; // 拖的時候不要被定時讀取重畫
+    }, true);
+    pane.addEventListener("pointermove", (e) => {
+      if (!reorder) return;
+      const over = document.elementFromPoint(e.clientX, e.clientY)?.closest?.("[data-hid]");
+      if (!over || over === reorder.t || over.parentNode !== reorder.t.parentNode) return;
+      const tiles = [...over.parentNode.children];
+      const after = tiles.indexOf(over) > tiles.indexOf(reorder.t);
+      over.parentNode.insertBefore(reorder.t, after ? over.nextSibling : over);
+      reorder.moved = true;
+    }, true);
+    const endReorder = () => {
+      if (!reorder) return;
+      const r = reorder;
+      reorder = null;
+      r.t.classList.remove("lifting");
+      homeAdjusting = false;
+      if (!r.moved) return;
+      r.t.dataset.skipClick = "1";
+      setTimeout(() => delete r.t.dataset.skipClick, 400);
+      // 新順序：畫面上這幾格的順序，後面接其他（沒顯示的）照原本的順序
+      const shown = [...r.t.parentNode.children].map((x) => x.dataset.hid);
+      const rest = homeItems(store.home || {}).map((x) => x.id).filter((id) => !shown.includes(id));
+      const order = [...shown, ...rest];
+      if (store.home?.prefs) store.home.prefs.order = order;
+      pane.__html = null;
+      api.huePrefs({ order });
+    };
+    pane.addEventListener("pointerup", endReorder, true);
+    pane.addEventListener("pointercancel", endReorder, true);
+    pane.addEventListener("pointerdown", (e) => {
+      const t = e.target.closest("[data-hid]");
+      if (!t || e.button !== 0 || e.altKey) return;
       press = { t, x: e.clientX, y: e.clientY, id: e.pointerId, adj: null };
       press.timer = setTimeout(() => {
         if (!press) return;
@@ -1060,14 +1099,16 @@ WIDGETS.home = {
     if (!t) return;
     pane.__html = null;
     if (/^[svz]/.test(t.dataset.hid) || t.dataset.hid === "off") {
-      // 場景：套用，閃一下「已套用」
-      t.classList.add("on");
+      // 場景：點一下套用；正在用的場景再點一下＝關掉那個房間的燈
+      const turnOff = /^[vz]/.test(t.dataset.hid) && t.dataset.on === "1";
+      t.classList.toggle("on", !turnOff);
+      t.dataset.on = turnOff ? "0" : "1";
       const st = t.querySelector("small");
       const sub = st?.textContent;
-      if (st) st.textContent = "套用中…";
-      api.homeSet(t.dataset.hid, true).then((r) => {
-        if (st) st.textContent = r?.error ? `失敗：${r.error}` : "已套用";
-        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, r?.error ? 4000 : 1500);
+      if (st) st.textContent = turnOff ? "關閉中…" : "套用中…";
+      api.homeSet(t.dataset.hid, !turnOff).then((r) => {
+        if (st) st.textContent = r?.error ? `失敗：${r.error}` : turnOff ? "已關閉" : "已套用";
+        setTimeout(() => { if (st) st.textContent = sub; loadHome(true); }, r?.error ? 4000 : 1500);
       });
       return;
     }

@@ -94,6 +94,7 @@ const v2Color = (a = {}) => {
 
 function createHue(settings, saveSettings, log = () => {}) {
   const sceneAuto = new Map(); // 場景 id → Hue App 裡有沒有開「自動播放」（套用時照這個）
+  const sceneLights = new Map(); // 場景 id → 它那個房間的 grouped_light（再點一下＝關掉這個房間的燈）
   const sceneColors = new Map(); // 場景 id → { at, colors }（場景很少改，一小時讀一次）
   const H = () => (settings.hue ||= { ip: "", key: "", hidden: {}, order: [] });
   const base = () => `http://${H().ip}/api/${unseal(H().key)}`;
@@ -145,6 +146,7 @@ function createHue(settings, saveSettings, log = () => {}) {
       const [sc, smart, rooms, zones] = await Promise.all(["scene", "smart_scene", "room", "zone"].map((t) => v2call(H().ip, key, t).catch((e) => (t === "scene" ? Promise.reject(e) : { data: [] }))));
       if (!Array.isArray(sc?.data)) return null;
       const names = new Map([...(rooms.data || []), ...(zones.data || [])].map((r) => [r.id, r.metadata?.name || ""]));
+      const groupLight = new Map([...(rooms.data || []), ...(zones.data || [])].map((r) => [r.id, (r.services || []).find((x) => x.rtype === "grouped_light")?.rid]));
       const colorsOf = (scene) => {
         const fromActions = (scene.actions || []).map((x) => v2Color(x.action));
         const fromPalette = [...(scene.palette?.color || []).map((c) => v2Color({ color: c.color, dimming: c.dimming })),
@@ -160,6 +162,7 @@ function createHue(settings, saveSettings, log = () => {}) {
         if (orphan(z.group)) continue;
         const targets = (z.week_timeslots || []).flatMap((w) => (w.timeslots || []).map((t) => t.target?.rid)).filter(Boolean);
         const cols = [...new Set(targets.flatMap((rid) => (byId.get(rid) ? colorsOf(byId.get(rid)) : [])))].slice(0, 3);
+        sceneLights.set("z" + z.id, groupLight.get(z.group?.rid));
         items.push({ id: "z" + z.id, kind: "scene", smart: true, name: z.metadata?.name || "智慧場景", room: names.get(z.group?.rid) || "Hue", on: z.state === "active", colors: cols });
       }
       for (const x of sc.data) {
@@ -167,6 +170,7 @@ function createHue(settings, saveSettings, log = () => {}) {
         // 有色盤的場景才能「動態」（顏色在色盤裡流動）
         const canDynamic = (x.palette?.color?.length || 0) + (x.palette?.color_temperature?.length || 0) > 0;
         sceneAuto.set("v" + x.id, !!x.auto_dynamic);
+        sceneLights.set("v" + x.id, groupLight.get(x.group?.rid));
         items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, autoDynamic: !!x.auto_dynamic, colors: colorsOf(x) });
       }
       return items;
@@ -244,6 +248,14 @@ function createHue(settings, saveSettings, log = () => {}) {
     if (vm) {
       try {
         const key = unseal(H().key);
+        // 正在用的場景再點一下：關掉這個場景所在房間的燈（智慧場景也先停下來）
+        if (on === false) {
+          if (vm[1] === "z") await v2call(H().ip, key, `smart_scene/${vm[2]}`, "PUT", { recall: { action: "deactivate" } }).catch(() => {});
+          const gl = sceneLights.get(id);
+          if (!gl) return { error: "找不到這個場景的房間" };
+          const r = await v2call(H().ip, key, `grouped_light/${gl}`, "PUT", { on: { on: false } });
+          return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
+        }
         if (vm[1] === "z") {
           const r = await v2call(H().ip, key, `smart_scene/${vm[2]}`, "PUT", { recall: { action: "activate" } });
           if (r?.errors?.length) log("hue smart scene error", r.errors[0].description);
@@ -345,7 +357,9 @@ function createHue(settings, saveSettings, log = () => {}) {
     info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {}, icons: H().icons || {} }),
     setPrefs({ hidden, order, sceneMode, icons } = {}) {
       if (icons && typeof icons === "object") {
-        H().icons = Object.fromEntries(Object.entries(icons).filter(([, v]) => /^[a-z_]{1,20}$/.test(v)).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), v]));
+        // 內建圖示名稱，或自己挑的照片（管理程式先縮成小圖，每張最多約 80KB）
+        const ok = (v) => /^[a-z_]{1,20}$/.test(v) || (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length < 80000);
+        H().icons = Object.fromEntries(Object.entries(icons).filter(([, v]) => ok(String(v))).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), String(v)]));
       }
       // id 最長是 "v" + 36 字的 UUID，以前切到 20 字會對不上（藏不起來）
       if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 64), true]));
