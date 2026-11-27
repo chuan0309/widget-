@@ -94,18 +94,69 @@ function layoutBackdrop(inst, x = inst.x, y = inst.y) {
   const st = inst.backdrop.style;
   if (!wall) { st.display = "none"; return; }
   st.display = "";
-  if (wall.mode === "color") { st.background = wall.color; return; }
+  if (wall.mode === "color") { st.background = wall.color; updateInk(inst, x, y); return; }
   if (!wallRect) return;
   st.backgroundImage = `url("${wall.url}")`;
   st.backgroundRepeat = wall.mode === "tile" ? "repeat" : "no-repeat";
   st.backgroundSize = `${wallRect.w}px ${wallRect.h}px`;
   st.backgroundPosition = `${wallRect.x - x + BLEED}px ${wallRect.y - y + BLEED}px`;
+  updateInk(inst, x, y);
+}
+
+/* ───────── 玻璃模式：桌布亮的地方換黑字 ─────────
+   把桌布縮成很小一張，量每張卡片後面那一塊的平均亮度；亮就加 .on-light（黑字、霧多一點） */
+let wallLum = null;
+const luma = (r, g, b) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+function loadWallLum() {
+  wallLum = null;
+  if (!wall) return;
+  if (wall.mode === "color") {
+    const [r, g, b] = (String(wall.color).match(/\d+/g) || [0, 0, 0]).map(Number);
+    wallLum = { flat: luma(r, g, b) };
+    for (const inst of instances.values()) updateInk(inst);
+    return;
+  }
+  const img = new Image();
+  img.onload = () => {
+    const W = 120, H = Math.max(1, Math.round((W * img.height) / img.width));
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, W, H);
+    wallLum = { data: ctx.getImageData(0, 0, W, H).data, W, H };
+    for (const inst of instances.values()) updateInk(inst);
+  };
+  img.src = wall.url;
+}
+function cardLum(inst, x, y) {
+  if (!wallLum) return null;
+  if (wallLum.flat != null) return wallLum.flat;
+  if (!wallRect) return null;
+  const [w, h] = SIZES[inst.size];
+  const { data, W, H } = wallLum;
+  const u0 = Math.floor(((x - wallRect.x) / wallRect.w) * W), u1 = Math.ceil(((x + w - wallRect.x) / wallRect.w) * W);
+  const v0 = Math.floor(((y - wallRect.y) / wallRect.h) * H), v1 = Math.ceil(((y + h - wallRect.y) / wallRect.h) * H);
+  let sum = 0, n = 0;
+  for (let v = Math.max(0, v0); v < Math.min(H, v1); v++) for (let u = Math.max(0, u0); u < Math.min(W, u1); u++) {
+    const i = (v * W + u) * 4;
+    sum += luma(data[i], data[i + 1], data[i + 2]); n++;
+  }
+  return n ? sum / n : null;
+}
+// ★ 亮度門檻：超過 0.62 換黑字、低於 0.55 換回白字（中間不動，拖來拖去不會一直閃）
+function updateInk(inst, x = inst.x, y = inst.y) {
+  const l = cardLum(inst, x, y);
+  if (l == null) return;
+  const on = inst.el.classList.contains("on-light");
+  if (!on && l > 0.62) inst.el.classList.add("on-light");
+  else if (on && l < 0.55) inst.el.classList.remove("on-light");
 }
 
 api.onHostInit?.((d) => {
   hostRect = d.host;
   wall = d.wall;
   wallRect = computeWallRect(d.area, d.scale);
+  if (wall?.url !== loadWallLum.url || wall?.mode === "color") { loadWallLum.url = wall?.url; loadWallLum(); }
   if (d.tint != null) setTint(d.tint);
   if (d.background) setBackground(d.background);
   if (d.fontWeight != null) setFont(d.fontWeight);
@@ -646,14 +697,33 @@ function batteryList() {
   const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e6 + (it.battery ?? 101) : i; };
   return list.filter((it) => !store.batteryPrefs.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
-const ringHTML = (it) => {
-  const state = it.battery == null ? "unknown" : it.battery <= 20 ? "low" : "";
-  const bolt = it.charging ? `<svg class="bolt" viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : "";
-  return `<div class="ring ${state} ${it.charging ? "charging" : ""}" style="--p:${it.battery ?? 100}">${deviceIcon(it.type)}${bolt}</div>`;
-};
+// 電量圓環（照 Mac「電池」小工具）：SVG 畫，圓頭；open＝下面開一個缺口、百分比放在缺口裡
+const BOLT_PATH = "M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z";
+function battRing(it, { size = 58, sw = 5.5, open = false, pct = false, ic = 0.42 } = {}) {
+  const r = (size - sw) / 2, C = 2 * Math.PI * r, c = size / 2;
+  const span = open ? 0.75 : 1;              // 開口圓弧：270°，缺口 90° 在正下方
+  const rot = open ? 135 : -90;               // 從左下（開口）或正上方開始順時針
+  const p = it.battery ?? 0;
+  const color = it.battery == null ? "var(--batt-unknown)" : it.battery <= 20 && !it.charging ? "var(--red)" : "var(--green)";
+  const arc = (len, stroke, cls = "") => `<circle class="${cls}" cx="${c}" cy="${c}" r="${r.toFixed(2)}" fill="none" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" transform="rotate(${rot} ${c} ${c})"/>`;
+  const fill = it.battery == null ? "" : arc(Math.max(0.01, (C * span * p) / 100), color, "fill");
+  const label = pct ? `<span class="bpct" style="font-size:${size > 100 ? 20 : 11.5}px">${it.battery != null ? it.battery + "%" : "—"}</span>` : "";
+  const bolt = it.charging ? `<svg class="bbolt" viewBox="-1 -1 14 20" style="width:${size * 0.2}px;height:${size * 0.28}px"><path d="${BOLT_PATH}"/></svg>` : "";
+  return `<div class="bring${open ? " open" : ""}" style="--s:${size}px;--ic:${(size * ic).toFixed(1)}px"><svg class="bsvg" width="${size}" height="${size}">${arc(C * span, "var(--batt-track)")}${fill}</svg>${deviceIcon(it.type)}${bolt}${label}</div>`;
+}
+// 橫的小電池（大尺寸清單用）
+const battGlyph = (it) => it.battery == null ? "" :
+  `<span class="bglyph ${it.charging ? "charging" : it.battery <= 20 ? "low" : ""}"><i style="width:${Math.max(6, it.battery)}%"></i>${it.charging ? `<svg viewBox="-1 -1 14 20"><path d="${BOLT_PATH}"/></svg>` : ""}</span>`;
 
-// 一頁放幾台：中 4 台；大的照實際放得下的數量（最多 6 台）
-const battPer = (inst) => inst.size === "l" ? 6 : 4;
+// 版型：大＝清單 8 台；中＝4 台以內全圓環（% 在下面），超過就 8 台開口圓弧；
+// 小＝看管理程式選的樣式：開口圓弧 4 台（預設）／iOS 全圓 4 台／只放 1 台
+function battLayout(inst, count) {
+  if (inst.size === "l") return { kind: "list", per: 8 };
+  if (inst.size === "m") return count <= 4 ? { kind: "rings", per: 4 } : { kind: "arcs8", per: 8 };
+  const style = store.batteryPrefs.small || "arc";
+  if (style === "one") return { kind: "one", per: 1 };
+  return { kind: style === "ios" ? "ios" : "arcs4", per: 4 };
+}
 
 WIDGETS.battery = {
   mount(pane, inst) {
@@ -661,33 +731,39 @@ WIDGETS.battery = {
     // 裝置太多時每 6 秒翻頁（滑鼠在上面時不翻）
     inst.timers.push(setInterval(() => {
       if (paused || inst.el.matches(":hover")) return;
-      const per = battPer(inst);
-      const pages = Math.ceil(batteryList().length / per);
+      const list = batteryList();
+      const pages = Math.ceil(list.length / battLayout(inst, list.length).per);
       if (pages > 1) { inst.battPage = (inst.battPage + 1) % pages; WIDGETS.battery.render(pane, inst); }
     }, 6000));
   },
   render(pane, inst) {
     const list = batteryList();
     if (list.length === 0) {
-      setHTML(pane, `<div class="setup-msg"><span class="ring unknown" style="--p:0;--size:46px">${icon("other")}</span><small>沒有連線中的藍牙裝置</small></div>`);
+      setHTML(pane, `<div class="setup-msg">${battRing({ type: "other", battery: null }, { size: 52, sw: 5 })}<small>沒有連線中的藍牙裝置</small></div>`);
       return;
     }
-    const per = battPer(inst);
+    const { kind, per } = battLayout(inst, list.length);
     const pages = Math.ceil(list.length / per);
     if (inst.battPage >= pages) inst.battPage = 0;
     const show = list.slice(inst.battPage * per, (inst.battPage + 1) * per);
-    // 大：跟 iPhone／Mac 的「電池」大組件一樣——圖示、名稱（一行，太長用…）、百分比、橫的電池圖；
-    // 固定 6 列，沒裝置的列也留著分隔線
-    const glyph = (it) => it.battery == null ? "" : `<span class="bglyph ${it.charging ? "charging" : it.battery <= 20 ? "low" : ""}"><i style="width:${Math.max(6, it.battery)}%"></i>${it.charging ? `<svg viewBox="0 0 12 18"><path d="M7.2 0 0 10.2h4.6L3.6 18 12 7.2H7.1z"/></svg>` : ""}</span>`;
-    const body = inst.size === "l"
-      ? show.map((it) => `<div class="batt-row" title="${esc(it.name)}"><span class="bicon">${deviceIcon(it.type)}</span>
+    const tip = (it) => esc(it.name) + (it.battery != null ? ` ${it.battery}%` : "");
+    let body;
+    if (kind === "list") {
+      body = show.map((it) => `<div class="batt-row" title="${esc(it.name)}"><span class="bicon">${deviceIcon(it.type)}</span>
           <b>${esc(it.name)}</b>
-          <span class="pct ${it.battery == null ? "none" : ""}">${it.battery != null ? it.battery + "%" : "已連線"}</span>${glyph(it)}</div>`).join("")
-        + `<div class="batt-row empty"></div>`.repeat(Math.max(0, per - show.length))
-      : show.map((it) => `<div class="batt-item" title="${esc(it.name)}">${ringHTML(it)}
-          <span>${it.battery != null ? it.battery + "%" : "已連線"}</span><small>${esc(it.name)}</small></div>`).join("");
+          <span class="pct ${it.battery == null ? "none" : ""}">${it.battery != null ? it.battery + "%" : "已連線"}</span>${battGlyph(it)}</div>`).join("")
+        + `<div class="batt-row empty"></div>`.repeat(Math.max(0, per - show.length));
+    } else if (kind === "rings") {
+      body = show.map((it) => `<div class="batt-cell" title="${tip(it)}">${battRing(it, { size: 64, sw: 6 })}<span class="bbig">${it.battery != null ? it.battery + "%" : "—"}</span></div>`).join("");
+    } else if (kind === "one") {
+      const it = show[0];
+      body = `<div class="batt-one" title="${tip(it)}">${battRing(it, { size: 118, sw: 10, open: true, pct: true, ic: 0.34 })}<b>${esc(it.name)}</b></div>`;
+    } else {
+      const ios = kind === "ios";
+      body = show.map((it) => `<div class="batt-cell" title="${tip(it)}">${battRing(it, ios ? { size: 62, sw: 6 } : { size: 60, sw: 5.5, open: true, pct: true })}</div>`).join("");
+    }
     const dots = pages > 1 ? `<div class="dots">${Array.from({ length: pages }, (_, i) => `<i class="${i === inst.battPage ? "on" : ""}"></i>`).join("")}</div>` : "";
-    setHTML(pane, `<div class="batt" style="--rows:${per}">${body}</div>${dots}`);
+    setHTML(pane, `<div class="batt b-${kind}" style="--rows:${per}">${body}</div>${dots}`);
   },
 };
 

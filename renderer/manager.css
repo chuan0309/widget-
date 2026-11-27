@@ -5,8 +5,9 @@
   --accent: #0a84ff;
   --ok: #30d158;
   --danger: #ff453a;
-  --group: rgba(255, 255, 255, 0.06);
-  --group-line: rgba(255, 255, 255, 0.07);
+  /* macOS「系統設定」深色：側欄透出 Mica 毛玻璃，右邊是實心面板、分組是圓角灰卡 */
+  --group: rgba(255, 255, 255, 0.065);
+  --group-line: rgba(255, 255, 255, 0.08);
   --hover: rgba(255, 255, 255, 0.07);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -14,7 +15,7 @@ html, body { height: 100%; }
 body {
   display: flex;
   color: var(--ink);
-  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", "Noto Sans TC", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  font: 14px/1.45 "Inter", "Noto Sans TC", "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   background: #1d1e26;
   overflow: hidden;
@@ -25,6 +26,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 input { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 svg.ms { fill: currentColor; width: 18px; height: 18px; flex-shrink: 0; }
+svg.dev .scr { opacity: 0.38; }
 
 /* 可拖動的標題列（右上角的最小化/關閉按鈕是 Windows 畫的） */
 .titlebar { position: fixed; left: 0; right: 140px; top: 0; height: 40px; -webkit-app-region: drag; z-index: 10; }
@@ -50,10 +52,7 @@ nav button {
   transition: background 0.15s, color 0.15s;
 }
 nav button:hover { background: var(--hover); color: #fff; }
-nav button.on { background: rgba(255, 255, 255, 0.1); color: #fff; font-weight: 600; }
-nav button.on::before { /* 左邊那條小藍線，像 Windows 11 設定 */
-  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent);
-}
+nav button.on { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; } /* 像 macOS：選中的整條變淡灰，不用藍線 */
 
 /* ───────── 右邊內容 ───────── */
 main {
@@ -61,9 +60,9 @@ main {
   margin: 8px 8px 8px 0;
   padding: 40px 40px 40px;
   overflow-y: auto;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.035);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: 14px; corner-shape: superellipse(1.4);
+  background: rgba(30, 30, 32, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 28px rgba(0, 0, 0, 0.25);
 }
 main::-webkit-scrollbar { width: 8px; }
 main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
@@ -80,8 +79,8 @@ h2 { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin: 26px 4px
 /* iOS 設定那種一組一組的清單 */
 .group {
   background: var(--group);
-  border-radius: 14px; corner-shape: superellipse(1.4);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  border-radius: 12px; corner-shape: superellipse(1.4);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 .group + .group { margin-top: 12px; }
@@ -90,7 +89,9 @@ h2 { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin: 26px 4px
   display: flex; align-items: center; gap: 14px;
   padding: 10px 16px;
 }
-.row + .row { border-top: 1px solid var(--group-line); }
+.row { position: relative; }
+/* 分隔線從文字開始（左邊縮排），跟 macOS 一樣 */
+.row + .row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--group-line); }
 label.row { cursor: pointer; }
 .row.clickable { cursor: pointer; transition: background 0.15s; }
 .row.clickable:hover { background: var(--hover); }
@@ -99,7 +100,7 @@ label.row { cursor: pointer; }
 .row-text b { font-weight: 600; }
 .row-text small { color: var(--ink-soft); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-icon {
-  width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 8px; corner-shape: superellipse(1.5); flex-shrink: 0;
   display: grid; place-items: center;
   background: rgba(255, 255, 255, 0.1);
 }

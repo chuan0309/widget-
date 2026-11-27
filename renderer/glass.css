@@ -6,13 +6,46 @@
   font-display: block;
 }
 :root {
-  /* 字和線的顏色（淺色背景時換成黑色） */
+  /* ═════════ Design Tokens（Apple Widget 風格）═════════
+     ★ 想調整外觀，改這一區的數字就好 */
+  --r-card: 22px;        /* ★ 小組件圓角（macOS 約 22px） */
+  --gap: 8px;            /* ★ 卡片裡方塊跟方塊、方塊跟邊的縫 */
+  --r-inner: calc(var(--r-card) - var(--gap)); /* 內層圓角＝外層 − 縫（同心圓角，縫隙等寬） */
+  --pad: 16px;           /* ★ 中、大的內距（小的是 14px，見 .size-s） */
+
+  /* 系統色（iOS 深色模式版本，在白卡上也夠清楚） */
+  --red: #ff453a; --orange: #ff9f0a; --yellow: #ffd60a; --green: #30d158;
+  --blue: #0a84ff; --purple: #bf5af2; --pink: #ff375f; --teal: #64d2ff;
+
+  /* 字和線的顏色（淺色卡片時換成黑色） */
   --fg: 255 255 255;
   --ink: rgb(var(--fg));
   --ink-soft: rgb(var(--fg) / 0.62);
-  --accent: #0a84ff;
-  --ok: #30d158;
+  --accent: var(--blue);
+  --ok: var(--green);
   --ease-spring: cubic-bezier(0.32, 1.4, 0.4, 1);
+
+  /* ── 三種卡片（body 上的 bg-glass／bg-dark／bg-light 切換）── */
+  /* 透明玻璃：模糊的桌布＋一層薄霧；字的顏色看桌布亮暗自動換（.card.on-light） */
+  --glass-blur: 32px;    /* ★ 模糊程度（Apple 約 28～36px） */
+  --glass-sat: 1.6;      /* ★ 飽和度（160%） */
+  --card-bg: rgb(255 255 255 / 0.1);
+  --card-border: rgb(255 255 255 / 0.26);
+  --card-shadow: 0 1px 1px rgb(0 0 0 / 0.08), 0 12px 32px rgb(0 0 0 / 0.18);
+}
+/* ★ 淺色：微霧白卡（底下透一點點模糊的桌布，像 macOS） */
+body.bg-light {
+  --fg: 0 0 0; --ink: #000; --ink-soft: rgb(60 60 67 / 0.62);
+  --card-bg: rgb(255 255 255 / 0.9);
+  --card-border: rgb(0 0 0 / 0.06);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 28px rgb(0 0 0 / 0.12);
+}
+/* ★ 深色：深碳灰卡 #1C1C1E */
+body.bg-dark {
+  --card-bg: rgb(28 28 30 / 0.9);
+  --card-border: rgb(255 255 255 / 0.12);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 32px rgb(0 0 0 / 0.36);
+  --ink-soft: rgb(235 235 245 / 0.6);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
@@ -32,12 +65,13 @@ html, body {
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 body { --t: 0.3; }
 
-/* ───────── 一個小組件＝一塊玻璃 ─────────
-   所有小組件都在同一個透明視窗裡，用 transform 擺位置（拖動時只有顯示卡在動，很順）。 */
+/* ───────── 一個小組件＝一張卡片 ─────────
+   所有小組件都在同一個透明視窗裡，用 transform 擺位置（拖動時只有顯示卡在動，很順）。
+   每張卡片＝模糊的桌布（.backdrop）＋一層卡片顏色（::after）＋1px 細邊（::before） */
 .card {
   position: absolute; left: 0; top: 0;
-  /* Apple 同大小的小組件圓角大約 22～24px；太圓會像泡泡、很玩具感 */
-  --r: 24px;
+  --r: var(--r-card);
+  --pad: 16px;
   border-radius: var(--r);
   corner-shape: superellipse(1.5);
   overflow: hidden;
@@ -45,48 +79,41 @@ body { --t: 0.3; }
   touch-action: none;
   will-change: transform;
   background: rgba(30, 32, 40, 0.5); /* 還沒拿到桌布時的底色 */
-  /* 很淡、很散的影子，像 macOS 桌面上的小組件（字不加陰影，保持乾淨） */
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16), 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--card-shadow);
+  color: var(--ink); /* 玻璃在亮桌布上換黑字時，卡片自己的字色也要跟著換 */
 }
+.card.size-s { --pad: 14px; }
 .card.dragging { z-index: 10; cursor: grabbing; box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.16); }
 .card.snapping { transition: transform 0.28s cubic-bezier(0.32, 1.2, 0.45, 1); }
 
-/* 模糊的桌布（只模糊小組件後面那一塊，多留一點邊）：模糊得夠、顏色飽和，才不會像霧玻璃 */
+/* 模糊的桌布（只模糊小組件後面那一塊，多留一點邊，不然邊緣會變淡） */
 .card > .backdrop {
   position: absolute; left: -48px; top: -48px; right: -48px; bottom: -48px;
   z-index: 0; pointer-events: none;
   background-repeat: no-repeat;
-  filter: blur(calc(28px + var(--t) * 18px)) saturate(1.7) brightness(calc(0.97 - var(--t) * 0.15));
+  filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
-
-/* 玻璃本身：一層深色（往「不同色調」越深），上面一點點亮光 */
+/* 卡片顏色：玻璃是薄霧＋「透明程度」滑桿控制的暗色；淺色／深色是白卡／黑卡 */
 .card::after {
   content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   border-radius: inherit; corner-shape: inherit;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 45%),
-    rgb(14 16 22 / calc(0.12 + var(--t) * 0.5));
+  background: linear-gradient(var(--card-bg), var(--card-bg)), rgb(14 16 22 / calc(var(--t) * 0.5));
 }
-/* 玻璃邊：很細的反光，上面亮、下面幾乎看不到 */
+body.bg-light .card::after, body.bg-dark .card::after { background: var(--card-bg); }
+/* 1px 細邊：乾淨的一條線（不是漸層光邊） */
 .card::before {
-  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
   border-radius: inherit; corner-shape: inherit;
-  padding: 1px;
-  background: linear-gradient(170deg,
-    rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08) 28%,
-    rgba(255, 255, 255, 0.03) 70%, rgba(255, 255, 255, 0.1));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
+  box-shadow: inset 0 0 0 1px var(--card-border);
 }
 
-/* ───────── 背景：透明玻璃（預設）／深色／淺色，像 Apple 一樣 ───────── */
-body.bg-dark .card > .backdrop, body.bg-light .card > .backdrop { display: none; }
-body.bg-dark .card { background: #1c1c1e; }
-body.bg-dark .card::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 50%); }
-body.bg-light { --fg: 0 0 0; --ink: #000; --ink-soft: rgb(0 0 0 / 0.5); }
-body.bg-light .card { background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 1px 2px rgba(0, 0, 0, 0.08); }
-body.bg-light .card::after { background: none; }
-body.bg-light .card::before { background: linear-gradient(170deg, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0.06)); }
+/* 玻璃放在亮的桌布上：字自動換成黑色、霧多一點（程式會量每張卡片後面桌布的亮度） */
+body.bg-glass .card.on-light {
+  --fg: 0 0 0; --ink: #000; --ink-soft: rgb(0 0 0 / 0.56);
+  --card-bg: rgb(255 255 255 / calc(0.3 + var(--t) * 0.4));
+  --card-border: rgb(255 255 255 / 0.5);
+}
+body.bg-glass .card.on-light::after { background: var(--card-bg); }
 
 /* 小組件內容 */
 .pane { position: absolute; inset: 0; z-index: 1; }
@@ -128,6 +155,8 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
 
 /* Material Symbols 圖示：實心白色 */
 svg.ms { fill: var(--ink); stroke: none; }
+/* 裝置圖示的螢幕：淡淡的（外框挖空後再補半透明） */
+svg.dev .scr { opacity: 0.38; }
 .ring svg.ms { width: calc(var(--size) * 0.46); height: calc(var(--size) * 0.46); }
 
 @media (prefers-reduced-motion: reduce) {

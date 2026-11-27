@@ -74,7 +74,7 @@
 .size-l .clock-date { margin-top: 4px; }
 
 /* ───────── 天氣 ───────── */
-.wt { height: 100%; padding: 16px; display: flex; flex-direction: column; }
+.wt { height: 100%; padding: var(--pad); display: flex; flex-direction: column; }
 /* 像 Apple 的天氣：用天空的顏色當背景（白天、晚上、陰天、下雨不一樣） */
 .pane.weather { --sky: linear-gradient(180deg, #2f6fd6, #5aa2ec); background: var(--sky); --fg: 255 255 255; --ink: #fff; --ink-soft: rgba(255, 255, 255, 0.72); color: #fff; }
 /* 顏色取自 iPhone 天氣小組件的截圖 */
@@ -124,7 +124,7 @@
 .wt-bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
 
 /* ───────── 空氣品質 ───────── */
-.aq { height: 100%; padding: 14px 16px; display: flex; flex-direction: column; }
+.aq { height: 100%; padding: 14px var(--pad); display: flex; flex-direction: column; }
 .aq-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 .aq-dots { width: 15px; height: 15px; fill: currentColor; }
 .aq-num { font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 46px; font-weight: 400; line-height: 1.05; letter-spacing: -0.02em; margin-top: auto; }
@@ -148,84 +148,68 @@
 .aq-pol small { font-size: 9.5px; color: var(--ink-soft); }
 .aq-pol.main { box-shadow: inset 0 0 0 1.5px rgb(var(--fg) / 0.35); }
 
-/* ───────── 電量 ───────── */
-.batt { height: 100%; display: flex; align-items: center; justify-content: space-around; padding: 0 8px; }
-.batt-item {
-  width: 78px;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  font-size: 15px; font-weight: 600;
-}
-.card.enter .batt-item, .card.enter .batt-row { animation: pop 0.5s var(--ease-spring) both; }
-/* 名稱跟 Windows 裡一模一樣，放不下就換行（最多兩行），不用「…」切掉 */
-.batt-item small {
-  width: 100%; font-size: 10.5px; line-height: 1.25; font-weight: 500; color: var(--ink-soft);
-  text-align: center; word-break: break-word;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.batt-item.placeholder { opacity: 0.45; }
-.size-m .batt-item .ring { --size: 52px; }
-/* 小：2×2 只放圓環 */
-.size-s .batt { display: grid; grid-template-columns: 1fr 1fr; place-items: center; padding: 14px; gap: 4px; }
-.size-s .batt-item { width: auto; gap: 3px; font-size: 13px; }
-.size-s .batt-item .ring { --size: 50px; }
-.size-s .batt-item small { display: none; }
-/* 跟 Mac 的「電池」小工具一樣：中只有圓環＋百分比（不寫名字，滑鼠移上去看），小只有圓環；圓環中間不填底色 */
-.size-s .batt-item span { display: none; }
-.size-m .batt-item small { display: none; }
-.batt-item .ring { background: none; }
-.batt-item .ring svg.ms { width: calc(var(--size) * 0.38); height: calc(var(--size) * 0.38); }
-.pane .size-m .batt-item span, .size-m .batt-item span { font-size: 13px; font-weight: max(400, calc(var(--fw, 600) - 100)); }
-/* 大：一行一台，固定 6 列平均分配高度（像 Apple 的「電池」大組件） */
-.size-l .batt { display: grid; grid-template-rows: repeat(var(--rows, 6), 1fr); grid-template-columns: 1fr; justify-content: stretch; align-items: stretch; padding: 8px 18px; gap: 0; }
+/* ───────── 電量（照 Mac「電池」小工具）───────── */
+.pane.battery { --batt-track: rgb(120 120 128 / 0.36); --batt-unknown: rgb(var(--fg) / 0.4); --batt-glyph: rgb(var(--fg) / 0.62); }
+body.bg-light .pane.battery { --batt-track: rgb(120 120 128 / 0.2); }
+body.bg-glass .pane.battery { --batt-track: rgb(var(--fg) / 0.22); }
+.batt { height: 100%; }
+.card.enter .batt-cell, .card.enter .batt-row, .card.enter .batt-one { animation: pop 0.5s var(--ease-spring) both; }
+/* 圓環：SVG 圓弧＋中間裝置圖示；充電時閃電卡在圓環正上方 */
+.bring { position: relative; width: var(--s); height: var(--s); display: grid; place-items: center; flex-shrink: 0; }
+.bring .bsvg { position: absolute; inset: 0; overflow: visible; }
+.bring .bsvg .fill { transition: stroke-dasharray 0.8s ease; }
+.bring > svg.ms { position: relative; width: var(--ic); height: var(--ic); fill: var(--batt-glyph); }
+.bring.open > svg.ms { margin-top: calc(var(--s) * -0.08); }
+.bbolt { position: absolute; left: 50%; top: 0; translate: -50% -50%; fill: var(--green); stroke: var(--bolt-cut, #1c1c1e); stroke-width: 2.6px; paint-order: stroke; overflow: visible; }
+body.bg-light .bbolt { --bolt-cut: #fff; }
+body.bg-glass .bbolt { stroke: none; filter: drop-shadow(0 0 1.5px rgb(0 0 0 / 0.35)); }
+.bpct { position: absolute; left: 0; right: 0; bottom: -0.1em; text-align: center; line-height: 1; font-family: "Inter", "Noto Sans TC", sans-serif; font-variant-numeric: tabular-nums; }
+.batt-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-width: 0; min-height: 0; }
+.bbig { font-family: "Inter", "Noto Sans TC", sans-serif; font-size: 19px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+/* 中：4 台全圓環＋大百分比 */
+.b-rings { display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; padding: 0 10px; }
+/* 中：8 台開口圓弧（2 排）；小：4 台（2×2） */
+.b-arcs8 { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; place-items: center; padding: 10px 12px; }
+.b-arcs4, .b-ios { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; place-items: center; padding: 12px; }
+/* 小：只放 1 台 */
+.batt-one { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 10px 12px 8px; }
+.b-one .batt-one { padding-bottom: 18px; } /* 下面留位置給翻頁的小點 */
+.batt-one b { font-size: 12.5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pane .bbig, .pane .bpct, .pane .batt-one b { font-weight: max(400, calc(var(--fw, 600) - 100)); }
+/* 大：一行一台，固定 8 列平均分配高度（像 Apple 的「電池」大組件） */
+.b-list { display: grid; grid-template-rows: repeat(var(--rows, 8), 1fr); grid-template-columns: 1fr; padding: 6px 18px; }
 .batt-row {
   position: relative;
-  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto 27px; align-items: center; gap: 0 12px;
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) auto 27px; align-items: center; gap: 0 12px;
   min-height: 0;
 }
-/* 分隔線從名稱那一欄開始（圖示下面沒有線），跟 Apple 一樣 */
-.batt-row + .batt-row::before { content: ""; position: absolute; top: 0; left: 42px; right: -18px; border-top: 0.5px solid rgb(var(--fg) / 0.16); }
+/* 分隔線從名稱那一欄開始（圖示下面沒有線），一路畫到卡片右邊，跟 Apple 一樣 */
+.batt-row + .batt-row::before { content: ""; position: absolute; top: 0; left: 40px; right: -18px; border-top: 0.5px solid rgb(var(--fg) / 0.16); }
 .batt-row .bicon { display: grid; place-items: center; }
-.batt-row .bicon svg { width: 20px; height: 20px; }
-.batt-row .bicon svg:not(.ms) { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.batt-row b { font-size: 14.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.batt-row .pct { font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 14.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.batt-row .bicon svg { width: 22px; height: 22px; fill: var(--batt-glyph); }
+.batt-row b { font-size: 14px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batt-row .pct { font-family: "Inter", "Noto Sans TC", sans-serif; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
 /* Mac 的電池清單字比較細（一般粗細），比其他小組件細一級 */
 .pane .batt-row :is(b, .pct) { font-weight: max(400, calc(var(--fw, 600) - 100)); }
 .batt-row .pct.none { font-size: 11.5px; color: var(--ink-soft); grid-column: 3 / 5; }
-/* 橫的電池圖：外框＋右邊小凸點，裡面照電量填滿；充電中綠色＋閃電，20% 以下紅色 */
+/* 橫的電池圖：外框＋右邊小凸點，裡面照電量填滿；平常綠色、充電中＋閃電、20% 以下紅色 */
 .bglyph {
   position: relative; width: 24px; height: 11.5px; border-radius: 3.5px;
   box-shadow: inset 0 0 0 1px rgb(var(--fg) / 0.32); padding: 2px; box-sizing: border-box;
   display: flex; align-items: stretch;
 }
 .bglyph::after { content: ""; position: absolute; right: -3px; top: 50%; width: 1.6px; height: 4px; translate: 0 -50%; border-radius: 0 1px 1px 0; background: rgb(var(--fg) / 0.32); }
-.bglyph i { display: block; border-radius: 1.5px; background: var(--ok); } /* 跟 Mac 的「電池」小工具一樣：平常就是綠色 */
-.bglyph.low i { background: #ff453a; }
-.bglyph.charging i { background: var(--ok); }
-.bglyph svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 6.5px; height: 9.5px; fill: #1c1c1e; stroke: rgba(255, 255, 255, 0.9); stroke-width: 1.1px; paint-order: stroke; }
-/* 充電中：跟 iPhone「電池」小組件一樣——圓環變綠，閃電放在圓環正上方，
-   圓環在閃電那裡挖一個缺口（不是另外加一個圓形徽章） */
-.ring.charging { --ring-color: var(--ok); }
-.ring.charging::before {
-  -webkit-mask:
-    radial-gradient(closest-side, transparent 84%, #000 86%),
-    radial-gradient(circle at 50% 4%, transparent calc(var(--size) * 0.17), #000 calc(var(--size) * 0.17 + 0.5px));
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-}
-.ring svg.bolt {
-  position: absolute; left: 50%; top: 4%; translate: -50% -50%;
-  width: calc(var(--size) * 0.2); height: calc(var(--size) * 0.3);
-  fill: var(--ink); stroke: none;
-}
+.bglyph i { display: block; border-radius: 1.5px; background: var(--green); }
+.bglyph.low i { background: var(--red); }
+.bglyph svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 7px; height: 10px; fill: var(--ink); stroke: var(--bolt-cut, #1c1c1e); stroke-width: 1.4px; paint-order: stroke; }
+body.bg-light .bglyph svg { --bolt-cut: #fff; }
 .dots { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; z-index: 1; }
 .dots i { width: 5px; height: 5px; border-radius: 50%; background: rgb(var(--fg) / 0.35); transition: background 0.3s; }
 .dots i.on { background: var(--ink); }
 @keyframes pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
 
 /* ───────── 音訊輸出 ───────── */
-.au { height: 100%; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.au { height: 100%; padding: 14px var(--pad) 12px; display: flex; flex-direction: column; gap: 6px; }
 .au-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-soft); padding: 0 4px; }
 .au-head svg { width: 14px; height: 14px; fill: currentColor; }
 .au-row {
@@ -253,9 +237,9 @@
 .au-now small { font-size: 11px; color: var(--ink-soft); }
 
 /* ───────── Google 日曆 ───────── */
-.cal { height: 100%; padding: 14px 16px; display: flex; gap: 14px; }
+.cal { height: 100%; padding: 14px var(--pad); display: flex; gap: 14px; }
 .cal-today { display: flex; flex-direction: column; flex-shrink: 0; }
-.cal-week { font-size: 13px; font-weight: 700; color: #ff453a; }
+.cal-week { font-size: 13px; font-weight: 700; color: var(--red); }
 .cal-day { font-family: "Inter", "Noto Sans TC", "Segoe UI Variable Display", "Segoe UI", sans-serif; font-size: 44px; font-weight: 600; line-height: 1; margin-top: 2px; letter-spacing: -0.02em; }
 .cal-lunar { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
 /* 中：「26 ｜十八｜週四」直排 */
@@ -309,10 +293,10 @@ body.paused *, body.paused *::before, body.paused *::after { animation-play-stat
    小 1 張、中 3 張（橫排）、大 6 張（3×2） */
 .pane.pinterest { cursor: pointer; --pn-bg: #0d0d0f; background: var(--pn-bg); }
 body.bg-light .pane.pinterest { --pn-bg: #fff; }
-.pn-grid { position: absolute; inset: 8px; display: grid; gap: 8px; }
+.pn-grid { position: absolute; inset: var(--gap); display: grid; gap: var(--gap); }
 .pn-grid.n3 { grid-template-columns: repeat(3, 1fr); }
 .pn-grid.n6 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
-.pn-cell { position: relative; overflow: hidden; border-radius: 16px; corner-shape: superellipse(1.5); background: rgb(var(--fg) / 0.08); }
+.pn-cell { position: relative; overflow: hidden; border-radius: var(--r-inner); corner-shape: superellipse(1.5); background: rgb(var(--fg) / 0.08); }
 .pn-photo {
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: cover; opacity: 0; transition: opacity 1.6s ease;
@@ -371,11 +355,11 @@ button.setup-msg { border: 0; background: none; color: inherit; font: inherit; c
 
 /* ───────── 家庭：照 iPhone「家庭」小工具 ─────────
    方塊左上角圖示，下面兩行：房間（淡）、名稱（粗）。開著＝白色方塊＋黃色燈泡；關著＝半透明 */
-.hm { height: 100%; padding: 10px; display: grid; gap: 8px; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); }
+.hm { height: 100%; padding: var(--gap); display: grid; gap: var(--gap); grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); }
 .hm-s { grid-template-columns: repeat(2, 1fr); }
 .hm-l { grid-template-rows: repeat(4, 1fr); }
 .hm-tile {
-  min-width: 0; min-height: 0; border: 0; border-radius: 18px; padding: 9px 10px;
+  min-width: 0; min-height: 0; border: 0; border-radius: var(--r-inner); corner-shape: superellipse(1.5); padding: 9px 10px;
   display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; text-align: left;
   font: inherit; color: var(--ink); background: rgb(var(--fg) / 0.14); cursor: pointer;
   touch-action: none; user-select: none; transition: background 0.25s, color 0.25s, transform 0.15s;
@@ -391,8 +375,8 @@ button.setup-msg { border: 0; background: none; color: inherit; font: inherit; c
 .hm-tile.on .hm-text small { color: rgba(60, 60, 67, 0.6); }
 .hm-tile.on .hm-ico svg { fill: #ffcc00; }
 .hm-tile.on.scene .hm-ico svg { fill: #ff9f0a; }
-body.bg-light .hm-tile { background: rgba(0, 0, 0, 0.06); }
-body.bg-light .hm-tile.on { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
+body.bg-light .hm-tile, body.bg-glass .card.on-light .hm-tile { background: rgba(0, 0, 0, 0.06); }
+body.bg-light .hm-tile.on, body.bg-glass .card.on-light .hm-tile.on { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14); }
 .hm-tile.dead { opacity: 0.5; }
 /* 長按調亮度：白色從左邊填到目前亮度 */
 .hm-tile.adjust { background: linear-gradient(90deg, rgba(255, 255, 255, 0.96) var(--bri, 50%), rgb(var(--fg) / 0.18) var(--bri, 50%)); color: #000; transform: scale(1.04); }
