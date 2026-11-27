@@ -131,6 +131,16 @@
       <div class="group" id="deviceList"></div>
       <p class="hint">關掉某台裝置的開關，那台就不會跳通知（電量小組件還是會顯示）。</p>
 
+      <h2>電量小組件的樣式</h2>
+      <div class="group">
+        <label class="row"><span class="row-text"><b>小尺寸</b><small>中、大尺寸會自動排：中 4 台以內是圓環，超過就換 8 台小圓弧；大是清單</small></span>
+          <select id="battSmall" class="select">
+            <option value="arc">4 台圓弧＋百分比</option>
+            <option value="ios">4 台圓環（像 iPhone，不顯示數字）</option>
+            <option value="one">只放 1 台（大圓弧）</option>
+          </select></label>
+      </div>
+
       <h2>電量小組件要顯示的裝置</h2>
       <div class="group" id="battList"></div>
       <p class="hint">開關決定要不要顯示在電量小組件；用 ↑ ↓ 排順序（沒連線的裝置不會出現在小組件上）。</p>

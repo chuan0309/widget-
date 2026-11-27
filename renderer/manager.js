@@ -202,6 +202,7 @@ function renderDevices() {
 // 電量小組件：顯示哪些、順序
 function renderBatteryList() {
   const prefs = state.settings.batteryWidget || { hidden: {}, order: [] };
+  $("battSmall").value = prefs.small || "arc";
   const known = [...state.devices];
   const order = (prefs.order || []).filter((id) => known.some((d) => d.id === id));
   for (const d of known.sort((a, b) => a.name.localeCompare(b.name))) if (!order.includes(d.id)) order.push(d.id);
@@ -232,6 +233,10 @@ function renderBatteryList() {
   }));
 }
 
+$("battSmall").addEventListener("change", (e) => {
+  state.settings.batteryWidget = { ...(state.settings.batteryWidget || {}), small: e.target.value };
+  save({ batteryWidget: { small: e.target.value } }, "已套用");
+});
 $("btConnect").addEventListener("change", (e) => save({ bluetooth: { notifyConnect: e.target.checked } }));
 $("btLow").addEventListener("change", (e) => save({ bluetooth: { notifyLow: e.target.checked } }));
 $("btThreshold").addEventListener("input", (e) => ($("btThresholdOut").textContent = `${e.target.value}%`));

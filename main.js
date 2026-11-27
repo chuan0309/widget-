@@ -730,6 +730,7 @@ ipcMain.handle("mgr:set", (_e, patch = {}) => {
       if (h) settings.batteryWidget.hidden[id] = true; else delete settings.batteryWidget.hidden[id];
     }
     if (Array.isArray(b.order)) settings.batteryWidget.order = b.order.map(String).slice(0, 200);
+    if (["arc", "ios", "one"].includes(b.small)) settings.batteryWidget.small = b.small; // 小尺寸的樣式
     broadcast("battery:prefs", settings.batteryWidget);
   }
   if (patch.sizes) for (const [k, v] of Object.entries(patch.sizes)) if (KINDS.includes(k)) setWidgetSize(k, v);
