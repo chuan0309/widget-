@@ -242,8 +242,21 @@ function createHue(settings, saveSettings, log = () => {}) {
     }
   }
 
+  // 亮度 1～100%（會順便打開）：id 是 g房間 或 l燈
+  async function setBri(id, pct) {
+    if (!paired()) return { error: "還沒配對" };
+    const m = String(id).match(/^([gl])(\d+)$/);
+    if (!m) return { error: "這個不能調亮度" };
+    const bri = Math.min(254, Math.max(1, Math.round((Number(pct) / 100) * 254)));
+    const url = m[1] === "g" ? `${base()}/groups/${m[2]}/action` : `${base()}/lights/${m[2]}/state`;
+    try {
+      const r = await call(url, "PUT", { on: true, bri });
+      return r?.some?.((x) => x.error) ? { error: r.find((x) => x.error).error.description } : { ok: true };
+    } catch { return { error: "連不到 Hue Bridge" }; }
+  }
+
   return {
-    discover, pair, unpair, state, set,
+    discover, pair, unpair, state, set, setBri,
     info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [] }),
     setPrefs({ hidden, order } = {}) {
       if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 20), true]));

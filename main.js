@@ -1056,6 +1056,7 @@ ipcMain.handle("home:set", async (_e, id, on) => {
   sendToKind("home", "home:changed");
   return r;
 });
+ipcMain.handle("home:bri", (_e, id, pct) => hue.setBri(String(id), Number(pct)));
 ipcMain.handle("hue:info", () => hue.info());
 ipcMain.handle("hue:discover", () => hue.discover());
 ipcMain.handle("hue:pair", async (_e, ip) => {

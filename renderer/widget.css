@@ -410,3 +410,9 @@ button.setup-msg { border: 0; background: none; color: inherit; font: inherit; c
 .hm-s .hm-ico.off::after { border-width: 2px; }
 .hm-text b { font-size: 13.5px; }
 .hm-ico.scene.smart svg { width: 55%; height: 55%; fill: rgba(0, 0, 0, 0.75); }
+/* 長按調亮度：方塊變成一條亮度條，黃色是目前亮度 */
+.hm-tile.adjust { background: linear-gradient(90deg, #ffd60a var(--bri, 50%), rgb(var(--fg) / 0.14) var(--bri, 50%)); color: var(--ink); transform: scale(1.03); touch-action: none; }
+.hm-tile.adjust .hm-text small { color: var(--ink); font-variant-numeric: tabular-nums; }
+.hm-tile.adjust .hm-ico { background: rgba(255, 255, 255, 0.85); }
+.hm-tile.adjust .hm-ico svg { fill: #ff9f0a; }
+.hm-tile { touch-action: none; user-select: none; }

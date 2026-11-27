@@ -743,8 +743,9 @@ async function loadHome(force = false) {
   if (!needed || paused || (!force && Date.now() - homeAt < 8000)) return;
   homeAt = Date.now();
   try { store.home = await api.homeGet(); } catch { store.home = { error: "讀取失敗" }; }
-  refresh("home");
+  if (!homeAdjusting) refresh("home"); // 正在長按調亮度時不要重畫，不然手指下的方塊會不見
 }
+let homeAdjusting = false;
 setInterval(() => loadHome(), 10 * 1000); // 在 Hue App 或牆上開關改了，10 秒內跟著變
 api.onHomeChanged?.(() => loadHome(true));
 
@@ -771,9 +772,56 @@ const homeStatus = (it) => it.kind === "scene" || it.kind === "off" ? it.room : 
 
 WIDGETS.home = {
   // 方塊是 <button>，拖曳那段程式不會處理按鈕上的點擊，所以這裡自己聽 click
+  // 點一下：開／關（場景是套用）；長按（0.45 秒）不放、左右拖：調亮度（只有房間和燈）
   mount(pane, inst) {
-    pane.addEventListener("click", (e) => WIDGETS.home.tap(pane, inst, e.target));
-    loadHome(true);
+    let press = null;
+    pane.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-hid]");
+      if (t?.dataset.skipClick) { delete t.dataset.skipClick; return; } // 剛剛是長按，不要再切換開關
+      WIDGETS.home.tap(pane, inst, e.target);
+    });
+    pane.addEventListener("pointerdown", (e) => {
+      const t = e.target.closest("[data-hid]");
+      if (!t || e.button !== 0 || !/^[gl]\d/.test(t.dataset.hid)) return;
+      const it = store.home?.items?.find((x) => x.id === t.dataset.hid);
+      press = { t, x: e.clientX, id: e.pointerId, bri: it?.on ? it.bri ?? 100 : 0, adjusting: false };
+      press.timer = setTimeout(() => {
+        if (!press) return;
+        press.adjusting = homeAdjusting = true;
+        t.setPointerCapture?.(press.id);
+        t.classList.add("adjust");
+        WIDGETS.home.showBri(t, press.bri);
+      }, 450);
+    });
+    pane.addEventListener("pointermove", (e) => {
+      if (!press?.adjusting) return;
+      const w = press.t.getBoundingClientRect().width || 150;
+      press.cur = Math.round(Math.min(100, Math.max(1, press.bri + ((e.clientX - press.x) / w) * 100)));
+      WIDGETS.home.showBri(press.t, press.cur);
+    });
+    const end = () => {
+      if (!press) return;
+      clearTimeout(press.timer);
+      const p = press;
+      press = null;
+      if (!p.adjusting) return;
+      p.t.dataset.skipClick = "1";
+      setTimeout(() => delete p.t.dataset.skipClick, 400);
+      const bri = p.cur ?? p.bri;
+      const it = store.home?.items?.find((x) => x.id === p.t.dataset.hid);
+      if (it) { it.on = bri > 0; it.bri = bri; }
+      api.homeBri(p.t.dataset.hid, bri).finally(() => setTimeout(() => { homeAdjusting = false; p.t.classList.remove("adjust"); loadHome(true); }, 500));
+    };
+    pane.addEventListener("pointerup", end);
+    pane.addEventListener("pointercancel", end);
+    setTimeout(() => loadHome(true), 0); // 等小組件登記好再讀（不然第一次會被略過，要等 10 秒）
+  },
+  showBri(t, bri) {
+    t.style.setProperty("--bri", bri + "%");
+    t.classList.toggle("on", bri > 0);
+    t.dataset.on = bri > 0 ? "1" : "0";
+    const st = t.querySelector("small");
+    if (st) st.textContent = `亮度 ${bri}%`;
   },
   tap(pane, inst, target) {
     if (target.closest("[data-setup]")) return api.mgrOpen("home");
@@ -803,7 +851,7 @@ WIDGETS.home = {
   },
   render(pane, inst) {
     const d = store.home;
-    if (!d) { setHTML(pane, `<div class="setup-msg"><small>讀取中…</small></div>`); loadHome(true); return; }
+    if (!d) { setHTML(pane, `<div class="setup-msg"><small>讀取中…</small></div>`); setTimeout(() => loadHome(true), 0); return; }
     if (d.needSetup) {
       setHTML(pane, `<button class="setup-msg" data-setup><span class="hm-ico big">${icon("home")}</span><p>連接 Philips Hue</p><small>${esc(d.error || "點這裡設定")}</small></button>`);
       return;
