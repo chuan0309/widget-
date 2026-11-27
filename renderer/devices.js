@@ -40,7 +40,9 @@ function deviceIcon(type) {
 }
 
 // 家庭小組件的圖示：可以自己選；沒選就照名稱挑（舒睡→月亮、春花→花、銀河→星星、極光→波浪…）
-const HOME_ICON_CHOICES = [["", "自動"], ["scene", "星光"], ["moon", "月亮"], ["star", "星星"], ["sun", "太陽"], ["flower", "花"], ["wave", "極光／波浪"], ["heart", "愛心"], ["bed", "床"], ["bulb", "燈泡"], ["ac", "冷氣"], ["fan", "電扇"], ["home", "房子"], ["schedule", "時鐘"]];
+const HOME_ICON_CHOICES = [["", "自動"], ["scene", "星光"], ["moon", "月亮"], ["star", "星星"], ["sun", "太陽"], ["flower", "花"], ["wave", "極光"], ["drop", "水滴"], ["fire", "火"], ["heart", "愛心"], ["bed", "床"], ["book", "閱讀"], ["film", "電影"], ["bulb", "燈泡"], ["ac", "冷氣"], ["fan", "電扇"], ["snow", "雪花"], ["home", "房子"], ["schedule", "時鐘"]];
+// 圖示可以是內建的名字，也可以是使用者自己挑的照片（data:image/...，存在設定裡）
+const homeIconHTML = (name) => (String(name).startsWith("data:image/") ? `<img class="hm-photo" src="${name}" alt="" />` : icon(name));
 function homeAutoIcon(it) {
   if (it.kind === "room") return "home";
   if (it.kind === "light" || it.kind === "off") return "bulb";

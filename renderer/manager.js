@@ -777,22 +777,22 @@ async function loadHue() {
       : it.kind === "fan" ? "電扇（Matter）" : it.kind === "switch" ? "開關（Matter）" : "燈";
     const modeSel = it.kind === "scene" && !it.smart && it.canDynamic
       ? `<select class="select small">${MODES.map(([k, n]) => `<option value="${k}" ${modeKey(sceneMode[it.id]) === k ? "selected" : ""}>${n}</option>`).join("")}</select>` : "";
-    const iconSel = `<select class="select small" title="圖示">${HOME_ICON_CHOICES.map(([k, n]) => `<option value="${k}" ${(icons[it.id] || "") === k ? "selected" : ""}>${n}</option>`).join("")}</select>`;
-    row.innerHTML = `<span class="row-icon">${icon(homeIconName(it, icons))}</span>
+    row.innerHTML = `<button class="row-icon icon-pick" title="點一下換圖示">${homeIconHTML(homeIconName(it, icons))}</button>
       <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${sub}</small></span>
-      ${iconSel}${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
+      ${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
     row.querySelector("input").addEventListener("change", async (e) => {
       if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;
       await window.api.huePrefs({ hidden });
       toast(e.target.checked ? `會顯示「${it.name}」` : `不顯示「${it.name}」`);
     });
-    const [iconBox, modeBox] = row.querySelectorAll("select");
-    iconBox.addEventListener("change", async (e) => {
-      if (e.target.value) icons[it.id] = e.target.value; else delete icons[it.id];
-      row.querySelector(".row-icon").innerHTML = icon(homeIconName(it, icons));
+    const modeBox = row.querySelector("select");
+    // 點圖示：跳出一整格圖讓你挑，也可以用自己的照片
+    row.querySelector(".icon-pick").addEventListener("click", () => openIconPicker(it, icons[it.id] || "", async (v) => {
+      if (v) icons[it.id] = v; else delete icons[it.id];
+      row.querySelector(".icon-pick").innerHTML = homeIconHTML(homeIconName(it, icons));
       await window.api.huePrefs({ icons });
       toast(`「${it.name}」換圖示了`);
-    });
+    }));
     modeBox?.addEventListener("change", async (e) => {
       const [k, label, speed] = MODES.find(([key]) => key === e.target.value);
       sceneMode[it.id] = k === "auto" ? { mode: "auto" } : speed == null ? { mode: "static" } : { mode: "dynamic", speed };
@@ -801,4 +801,44 @@ async function loadHue() {
     });
     return row;
   }));
+}
+
+/* ───────── 選圖示：一整格圖＋用自己的照片 ───────── */
+function openIconPicker(it, current, done) {
+  document.querySelector(".icon-modal")?.remove();
+  const m = document.createElement("div");
+  m.className = "icon-modal";
+  m.innerHTML = `<div class="icon-sheet"><b>「${escapeHTML(it.name)}」的圖示</b>
+      <div class="icon-grid">${HOME_ICON_CHOICES.map(([k, n]) => `<button data-k="${k}" class="${current === k ? "on" : ""}">
+        <span>${k ? homeIconHTML(k) : homeIconHTML(homeAutoIcon(it))}</span><small>${n}</small></button>`).join("")}
+        <label class="photo"><span>${current.startsWith("data:") ? homeIconHTML(current) : icon("film")}</span><small>用自己的照片</small><input type="file" accept="image/*" /></label>
+      </div>
+      <div class="icon-foot"><button class="btn small ghost" data-close>取消</button></div></div>`;
+  document.body.append(m);
+  const close = () => m.remove();
+  m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-close]")) close(); });
+  m.querySelectorAll("[data-k]").forEach((b) => b.addEventListener("click", () => { done(b.dataset.k); close(); }));
+  m.querySelector("input[type=file]").addEventListener("change", async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try { done(await photoToIcon(f)); close(); }
+    catch { toast("這張照片讀不了，換一張試試"); }
+  });
+}
+// 照片縮成 128×128（從中間裁成正方形），存成小小的 JPEG
+function photoToIcon(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 128;
+      const s = Math.min(img.width, img.height);
+      c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 128, 128);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("bad image")); };
+    img.src = url;
+  });
 }

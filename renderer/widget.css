@@ -459,3 +459,9 @@ body.bg-light .hm-tile.on { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0
 .hm-pop-box.light .hm-menu { background: rgba(245, 245, 247, 0.95); }
 .hm-pop-box.light .hm-menu button { color: #000; }
 .hm-pop-box.light .hm-pill-ico svg { fill: #fff; }
+/* 自己挑的照片圖示：圓形 */
+.hm-photo { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.hm-s .hm-photo { width: 22px; height: 22px; }
+.hm-pop-ico .hm-photo { width: 40px; height: 40px; }
+/* Alt＋拖：換順序時拿起來的方塊 */
+.hm-tile.lifting { transform: scale(1.08); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); z-index: 3; cursor: grabbing; opacity: 0.92; }
