@@ -753,10 +753,20 @@ function homeItems(d) {
   const p = d.prefs || {};
   const order = p.order || [];
   // 沒排過順序的：場景、房間、燈
-  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e4 + ({ scene: 0, room: 1000, light: 2000 }[it.kind] ?? 3000) : i; };
+  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e4 + ({ scene: 0, off: 500, room: 1000, light: 2000 }[it.kind] ?? 3000) : i; };
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
-const homeStatus = (it) => it.kind === "scene" ? "場景" : it.reachable === false ? "沒有回應" : it.on ? (it.bri != null ? `開啟 · ${it.bri}%` : "開啟") : "關閉";
+// 場景：圓形裡放場景燈光的顏色（Hue App 的場景照片 Bridge 拿不到，用實際顏色代替）
+function homeIcon(it) {
+  if (it.kind === "off") return `<span class="hm-ico off"></span>`;
+  if (it.kind === "scene") {
+    const c = it.colors?.length ? it.colors : ["rgb(255,214,150)"];
+    const bg = c.length === 1 ? c[0] : `conic-gradient(from 200deg, ${[...c, c[0]].join(",")})`;
+    return `<span class="hm-ico scene" style="background:${bg}"></span>`;
+  }
+  return `<span class="hm-ico">${icon(it.kind === "room" ? "home" : "bulb")}</span>`;
+}
+const homeStatus = (it) => it.kind === "scene" || it.kind === "off" ? it.room : it.reachable === false ? "沒有回應" : it.on ? (it.bri != null ? `開啟 · ${it.bri}%` : "開啟") : "關閉";
 
 WIDGETS.home = {
   // 方塊是 <button>，拖曳那段程式不會處理按鈕上的點擊，所以這裡自己聽 click
@@ -768,14 +778,15 @@ WIDGETS.home = {
     if (target.closest("[data-setup]")) return api.mgrOpen("home");
     const t = target.closest("[data-hid]");
     if (!t) return;
-    if (t.dataset.hid.startsWith("s")) {
+    if (t.dataset.hid.startsWith("s") || t.dataset.hid === "off") {
       // 場景：套用，閃一下「已套用」
       t.classList.add("on");
       const st = t.querySelector("small");
+      const sub = st?.textContent;
       if (st) st.textContent = "套用中…";
       api.homeSet(t.dataset.hid, true).then((r) => {
         if (st) st.textContent = r?.error ? "失敗" : "已套用";
-        setTimeout(() => { t.classList.remove("on"); loadHome(true); }, 1500);
+        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, 1500);
       });
       return;
     }
@@ -800,11 +811,16 @@ WIDGETS.home = {
       setHTML(pane, `<div class="setup-msg"><span class="hm-ico big">${icon("home")}</span><p>${esc(d.error)}</p><small>電腦和 Bridge 要在同一個網路</small></div>`);
       return;
     }
-    const list = homeItems(d).slice(0, HOME_TILES[inst.size] || 4);
+    // 「全部關閉」固定放最後一格（跟 Hue 的小工具一樣）
+    const n = HOME_TILES[inst.size] || 4;
+    const all = homeItems(d);
+    const off = all.find((it) => it.kind === "off");
+    const rest = all.filter((it) => it !== off);
+    const list = off ? [...rest.slice(0, n - 1), off] : rest.slice(0, n);
     if (!list.length) { setHTML(pane, `<button class="setup-msg" data-setup><small>沒有要顯示的燈，點這裡選</small></button>`); return; }
     setHTML(pane, `<div class="hm hm-${inst.size}">${list.map((it) => `<button class="hm-tile ${it.on ? "on" : ""} ${it.reachable === false ? "dead" : ""}" data-hid="${esc(it.id)}" data-on="${it.on ? 1 : 0}" title="${esc(it.name)}">
-      <span class="hm-ico">${icon({ room: "home", scene: "scene" }[it.kind] || "bulb")}</span>
-      <span class="hm-text"><b>${esc(it.name)}</b><small>${homeStatus(it)}</small></span></button>`).join("")}</div>`);
+      ${homeIcon(it)}
+      <span class="hm-text"><b>${esc(it.name)}</b><small>${esc(homeStatus(it))}</small></span></button>`).join("")}</div>`);
   },
 };
 

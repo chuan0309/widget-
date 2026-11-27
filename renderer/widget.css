@@ -402,3 +402,10 @@ body.bg-light .hm-tile.on { background: #fff6cc; }
 .hm-s .hm-text small { display: none; }
 button.setup-msg { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .hm-tile:focus, .hm-tile:focus-visible { outline: none; }
+/* 場景：圓形裡是場景燈光的顏色；全部關閉：黑底白圈（照 Hue 的小工具） */
+.hm-ico.scene { width: 36px; height: 36px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.hm-ico.off { width: 36px; height: 36px; background: #000; position: relative; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.hm-ico.off::after { content: ""; position: absolute; inset: 31%; border-radius: 50%; border: 3px solid #fff; }
+.hm-s .hm-ico.scene, .hm-s .hm-ico.off { width: 26px; height: 26px; }
+.hm-s .hm-ico.off::after { border-width: 2px; }
+.hm-text b { font-size: 13.5px; }
