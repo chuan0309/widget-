@@ -149,7 +149,9 @@ function createHue(settings, saveSettings, log = () => {}) {
         items.push({ id: "z" + z.id, kind: "scene", smart: true, name: z.metadata?.name || "智慧場景", room: names.get(z.group?.rid) || "Hue", on: z.state === "active", colors: cols });
       }
       for (const x of sc.data) {
-        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", colors: colorsOf(x) });
+        // 有色盤的場景才能「動態」（顏色在色盤裡流動）
+        const canDynamic = (x.palette?.color?.length || 0) + (x.palette?.color_temperature?.length || 0) > 0;
+        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, colors: colorsOf(x) });
       }
       return items;
     } catch (e) {
@@ -222,8 +224,16 @@ function createHue(settings, saveSettings, log = () => {}) {
     const vm = String(id).match(/^([vz])([0-9a-f-]{36})$/i);
     if (vm) {
       try {
-        const r = await v2call(H().ip, unseal(H().key), vm[1] === "z" ? `smart_scene/${vm[2]}` : `scene/${vm[2]}`, "PUT",
-          { recall: { action: vm[1] === "z" ? "activate" : "active" } });
+        const key = unseal(H().key);
+        if (vm[1] === "z") {
+          const r = await v2call(H().ip, key, `smart_scene/${vm[2]}`, "PUT", { recall: { action: "activate" } });
+          return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
+        }
+        // 一般場景：照使用者在管理程式選的「靜態／動態（慢、中、快）」套用
+        const pref = H().sceneMode?.[id] || {};
+        const dynamic = pref.mode === "dynamic";
+        if (dynamic && typeof pref.speed === "number") await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { speed: pref.speed }).catch(() => {});
+        const r = await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { recall: { action: dynamic ? "dynamic_palette" : "active" } });
         return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
       } catch { return { error: "連不到 Hue Bridge" }; }
     }
@@ -260,9 +270,16 @@ function createHue(settings, saveSettings, log = () => {}) {
 
   return {
     discover, pair, unpair, state, set, setBri,
-    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [] }),
-    setPrefs({ hidden, order } = {}) {
-      if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 20), true]));
+    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {} }),
+    setPrefs({ hidden, order, sceneMode } = {}) {
+      // id 最長是 "v" + 36 字的 UUID，以前切到 20 字會對不上（藏不起來）
+      if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 64), true]));
+      if (sceneMode && typeof sceneMode === "object") {
+        H().sceneMode = Object.fromEntries(Object.entries(sceneMode).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), {
+          mode: v?.mode === "dynamic" ? "dynamic" : "static",
+          speed: Math.min(1, Math.max(0, Number(v?.speed) || 0.5)),
+        }]));
+      }
       if (Array.isArray(order)) H().order = order.map(String).slice(0, 200);
       saveSettings();
     },

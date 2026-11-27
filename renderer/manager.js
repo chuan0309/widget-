@@ -725,16 +725,31 @@ async function loadHue() {
   $("hueItemsWrap").hidden = false;
   if (!d.items) { $("hueItems").innerHTML = `<div class="row"><span class="row-text"><b class="err">${escapeHTML(d.error || "讀不到")}</b></span></div>`; return; }
   const hidden = { ...(info.hidden || {}) };
+  const sceneMode = { ...(info.sceneMode || {}) };
+  const MODES = [["static", "靜態", null], ["slow", "動態・慢", 0.25], ["mid", "動態・中", 0.55], ["fast", "動態・快", 0.9]];
+  const modeKey = (m) => (m?.mode !== "dynamic" ? "static" : m.speed < 0.4 ? "slow" : m.speed < 0.75 ? "mid" : "fast");
   $("hueItems").replaceChildren(...d.items.map((it) => {
-    const row = document.createElement("label");
+    const row = document.createElement("div");
     row.className = "row";
-    row.innerHTML = `<span class="row-icon">${icon({ room: "home", scene: "scene", off: "bulb" }[it.kind] || "bulb")}</span>
-      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${it.kind === "room" ? `房間 · ${it.count} 盞燈` : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)}` : it.kind === "off" ? "一鍵關掉全部的燈（固定在最後一格）" : "燈"}</small></span>
-      <input type="checkbox" class="switch" ${hidden[it.id] ? "" : "checked"} />`;
+    const sub = it.kind === "room" ? `房間 · ${it.count} 盞燈`
+      : it.kind === "scene" && it.smart ? `智慧場景 · ${escapeHTML(it.room)} · 照時間自動變化（時段在 Hue App 設定）`
+      : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)}${it.canDynamic ? "" : " · 這個場景只有靜態"}`
+      : it.kind === "off" ? "一鍵關掉全部的燈" : "燈";
+    const modeSel = it.kind === "scene" && !it.smart && it.canDynamic
+      ? `<select class="select small">${MODES.map(([k, n]) => `<option value="${k}" ${modeKey(sceneMode[it.id]) === k ? "selected" : ""}>${n}</option>`).join("")}</select>` : "";
+    row.innerHTML = `<span class="row-icon">${icon({ room: "home", scene: it.smart ? "schedule" : "scene", off: "bulb" }[it.kind] || "bulb")}</span>
+      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${sub}</small></span>
+      ${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
     row.querySelector("input").addEventListener("change", async (e) => {
       if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;
       await window.api.huePrefs({ hidden });
       toast(e.target.checked ? `會顯示「${it.name}」` : `不顯示「${it.name}」`);
+    });
+    row.querySelector("select")?.addEventListener("change", async (e) => {
+      const [, label, speed] = MODES.find(([k]) => k === e.target.value);
+      sceneMode[it.id] = speed == null ? { mode: "static" } : { mode: "dynamic", speed };
+      await window.api.huePrefs({ sceneMode });
+      toast(`「${it.name}」改成${label}（下次點這個場景時套用）`);
     });
     return row;
   }));
