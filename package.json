@@ -30,7 +30,14 @@
       "helper.ps1",
       "locate.ps1",
       "renderer/**",
-      "assets/**"
+      "assets/**",
+      "matter-home.js",
+      "!**/node_modules/@matter/*/src/**",
+      "!**/node_modules/@project-chip/*/src/**",
+      "!**/node_modules/**/*.map",
+      "!**/node_modules/**/*.d.ts",
+      "!**/node_modules/@matter/*/dist/esm/**",
+      "!**/node_modules/@project-chip/*/dist/esm/**"
     ],
     "asarUnpack": [
       "helper.ps1",
@@ -62,6 +69,8 @@
   },
   "author": "Chuan",
   "dependencies": {
-    "electron-updater": "6.8.11"
+    "electron-updater": "6.8.11",
+    "@matter/main": "0.18.1",
+    "@project-chip/matter.js": "0.18.1"
   }
 }
