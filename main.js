@@ -10,6 +10,7 @@ const { autoUpdater } = require("electron-updater");
 const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
 const { createPhonePush } = require("./phone-push");
+const { createHue } = require("./hue");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
 // 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
@@ -54,8 +55,8 @@ log("start", { version: app.getVersion(), os: os.release(), electron: process.ve
 const DEFAULTS = {
   glass: "ios", // 大圓角＋模糊桌布（像 iPhone）
   tint: 30, // 玻璃的透明程度：0 = 最透明，100 = 顏色最深（像 iOS 的「透明 ↔ 不同色調」）
-  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true, aqi: false },
-  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l", aqi: "s" }, // s 小、m 中、l 大
+  widgets: { clock: true, weather: true, battery: true, audio: true, calendar: true, pinterest: true, aqi: false, home: false },
+  sizes: { clock: "s", weather: "s", battery: "m", audio: "s", calendar: "m", pinterest: "l", aqi: "s", home: "m" }, // s 小、m 中、l 大
   positions: {},
   city: { name: "台北市", lat: 25.033, lon: 121.565 },
   weatherAuto: true, // 天氣自動定位
@@ -94,7 +95,7 @@ function loadSettings() {
       audio: { ...DEFAULTS.audio, ...saved.audio },
       // 拿掉已經不存在的小組件（例如舊版的手機連結）
       stacks: (Array.isArray(saved.stacks) ? saved.stacks : [])
-        .map((st) => ({ ...st, items: (st.items || []).filter((k) => ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest"].includes(k)) }))
+        .map((st) => ({ ...st, items: (st.items || []).filter((k) => ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest", "home"].includes(k)) }))
         .filter((st) => st.items.length > 0),
       pinterest: { ...DEFAULTS.pinterest, ...saved.pinterest },
       bluetooth: { ...DEFAULTS.bluetooth, ...saved.bluetooth, muted: { ...saved.bluetooth?.muted } },
@@ -118,14 +119,14 @@ function saveSettings() {
 /* ───────── 小組件：全部放在「一個」透明視窗裡 ───────── */
 // 以前一個小組件一個視窗（每個都是一份瀏覽器，很吃記憶體）。現在整個主螢幕只有一個
 // 透明、點得穿的視窗，所有小組件都畫在裡面：記憶體少很多，拖動也只是畫面裡的移動，很順。
-const KINDS = ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest"]; // 也是預設排列的順序
+const KINDS = ["battery", "clock", "weather", "aqi", "audio", "calendar", "pinterest", "home"]; // 也是預設排列的順序
 const SIZES = {
   s: { width: 170, height: 170, cols: 1, rows: 1 },
   m: { width: 356, height: 170, cols: 2, rows: 1 },
   l: { width: 356, height: 356, cols: 2, rows: 2 },
 };
 const CELL = 186; // 170 + 16 間距
-const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest", aqi: "空氣品質" };
+const WIDGET_NAMES = { clock: "時鐘", weather: "天氣", battery: "電量", audio: "音訊輸出", calendar: "Google 日曆", pinterest: "Pinterest", aqi: "空氣品質", home: "家庭" };
 
 // 小組件的 key：一般小組件就是種類名稱（"clock"），疊放是 "stack:<id>"
 const stackOf = (key) => String(key).startsWith("stack:") ? (settings.stacks || []).find((st) => `stack:${st.id}` === key) : null;
@@ -1046,6 +1047,24 @@ ipcMain.handle("google:calendars", async () => {
 });
 ipcMain.handle("google:choose", (_e, id, on) => { google.chooseCalendar(String(id), !!on); return calendar.refresh(); });
 ipcMain.on("popup:close", () => { clearTimeout(popupTimer); popupDevice = null; popup?.setIgnoreMouseEvents(true, { forward: true }); }); // 瀏海收回去了
+
+/* ───────── 智慧家庭：Philips Hue（本機 Bridge） ───────── */
+const hue = createHue(settings, saveSettings, log);
+ipcMain.handle("home:get", async () => ({ ...(await hue.state()), prefs: hue.info() }));
+ipcMain.handle("home:set", async (_e, id, on) => {
+  const r = await hue.set(String(id), !!on);
+  sendToKind("home", "home:changed");
+  return r;
+});
+ipcMain.handle("hue:info", () => hue.info());
+ipcMain.handle("hue:discover", () => hue.discover());
+ipcMain.handle("hue:pair", async (_e, ip) => {
+  const r = await hue.pair(String(ip || "").trim());
+  if (r.ok) sendToKind("home", "home:changed");
+  return r;
+});
+ipcMain.handle("hue:unpair", () => { hue.unpair(); sendToKind("home", "home:changed"); return hue.info(); });
+ipcMain.handle("hue:prefs", (_e, prefs) => { hue.setPrefs(prefs || {}); sendToKind("home", "home:changed"); return hue.info(); });
 
 /* ───────── 遊戲模式：玩遊戲時把小組件整個關掉，省記憶體 ───────── */
 // 玩全螢幕遊戲時桌面本來就看不到，所以把小組件畫面、瀏海通知、背景小幫手（PowerShell）都關掉，

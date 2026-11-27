@@ -366,3 +366,38 @@ body.bg-light .pane.pinterest { --pn-bg: #fff; }
 }
 /* 天氣大溫度、AQI 大數字：iPhone 上就算其他字是粗的，這個也是一般粗細（粗 600 → 400） */
 .pane :is(.wt-temp, .aq-num) { font-weight: max(200, calc(var(--fw, 600) - 200)); }
+
+/* ───────── 家庭（Hue）：像 iPhone「家庭」小工具的方塊 ───────── */
+.hm { height: 100%; padding: 12px; display: grid; gap: 8px; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; }
+.hm-l { grid-template-rows: repeat(4, 1fr); }
+.hm-m { grid-template-rows: repeat(2, 1fr); }
+.hm-s { grid-template-rows: repeat(2, 1fr); gap: 6px; padding: 10px; }
+.hm-tile {
+  min-width: 0; min-height: 0; border: 0; border-radius: 14px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
+  font: inherit; color: var(--ink); background: rgb(var(--fg) / 0.12);
+  transition: background 0.25s, color 0.25s, transform 0.15s var(--ease-spring, ease);
+}
+.hm-tile:active { transform: scale(0.96); }
+.hm-ico { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgb(var(--fg) / 0.14); }
+.hm-ico svg { width: 17px; height: 17px; fill: rgb(var(--fg) / 0.7); }
+.hm-ico.big { width: 46px; height: 46px; }
+.hm-ico.big svg { width: 24px; height: 24px; }
+.hm-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.hm-text b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-text small { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
+/* 開著：白色方塊、黃色燈泡（跟 iPhone 一樣） */
+.hm-tile.on { background: rgba(255, 255, 255, 0.94); color: #1c1c1e; }
+.hm-tile.on .hm-ico { background: #ffd60a; }
+.hm-tile.on .hm-ico svg { fill: #fff; }
+.hm-tile.on .hm-text small { color: rgba(0, 0, 0, 0.55); }
+body.bg-light .hm-tile { background: rgba(0, 0, 0, 0.06); }
+body.bg-light .hm-tile.on { background: #fff6cc; }
+.hm-tile.dead { opacity: 0.5; }
+/* 小：只放圖示和名稱，直的排 */
+.hm-s .hm-tile { flex-direction: column; align-items: flex-start; justify-content: space-between; padding: 8px; gap: 2px; }
+.hm-s .hm-ico { width: 24px; height: 24px; }
+.hm-s .hm-ico svg { width: 14px; height: 14px; }
+.hm-s .hm-text b { font-size: 11.5px; }
+.hm-s .hm-text small { display: none; }
+button.setup-msg { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }

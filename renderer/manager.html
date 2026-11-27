@@ -23,6 +23,7 @@
       <button data-go="audio"><span data-icon="speaker"></span>音訊輸出</button>
       <button data-go="calendar"><span data-icon="calendar"></span>Google 日曆</button>
       <button data-go="pinterest"><span data-icon="pin"></span>Pinterest</button>
+      <button data-go="home"><span data-icon="home"></span>智慧家庭</button>
       <button data-go="weather"><span data-icon="partly_cloudy"></span>天氣</button>
       <button data-go="clock"><span data-icon="schedule"></span>世界時鐘</button>
       <button data-go="general"><span data-icon="settings"></span>一般</button>
@@ -233,6 +234,18 @@
         </div>
         <p class="hint err" id="pnUrlErr"></p>
       </details>
+    </section>
+
+    <!-- 智慧家庭 -->
+    <section data-section="home">
+      <h1>智慧家庭</h1>
+      <p class="lead">把 Philips Hue 的房間和燈放到「家庭」小組件，點一下就開關。只在家裡網路跟 Hue Bridge 溝通，不經過雲端。</p>
+      <div class="group" id="hueBox"></div>
+      <div id="hueItemsWrap" hidden>
+        <h2>要顯示的房間和燈</h2>
+        <div class="group" id="hueItems"></div>
+        <p class="hint">小組件：小、中放 4 個，大放 8 個，照這裡的順序（房間在前面）。</p>
+      </div>
     </section>
 
     <!-- 天氣 -->
