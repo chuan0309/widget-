@@ -109,8 +109,11 @@ function createMatterHome({ storageDir, log = () => {} }) {
       const label = b && (await b.getNodeLabelAttribute()) || (b && (await b.getProductNameAttribute?.()));
       if (label) return label;
     } catch {}
-    return ep.name && !/^endpoint/i.test(ep.name) ? ep.name : n.basicInformation?.nodeLabel || n.basicInformation?.productName || "Matter 設備";
+    // matter.js 自己取的名字（MA-roomairconditioner、endpoint1…）不好看，改用設備名稱或種類
+    if (ep.name && !/^(endpoint|MA-)/i.test(ep.name)) return ep.name;
+    return n.basicInformation?.nodeLabel || null;
   }
+  const KIND_NAMES = { ac: "冷氣", fan: "電扇", switch: "開關" };
 
   // 所有配對過的設備 → 小組件方塊
   async function state() {
@@ -124,7 +127,8 @@ function createMatterHome({ storageDir, log = () => {} }) {
       for (const ep of all(n)) {
         const t = cl(ep, Thermostat), f = cl(ep, FanControl), o = cl(ep, OnOff);
         if (!t && !f && !o) continue;
-        const base = { id: `m${id}-${ep.getNumber()}`, name: await nameOf(ep, n), room: "", reachable: true };
+        const kind = t ? "ac" : f ? "fan" : "switch";
+        const base = { id: `m${id}-${ep.getNumber()}`, name: (await nameOf(ep, n)) || KIND_NAMES[kind], room: "", reachable: true };
         try {
           if (t) {
             const mode = await t.getSystemModeAttribute();
