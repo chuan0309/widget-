@@ -401,3 +401,4 @@ body.bg-light .hm-tile.on { background: #fff6cc; }
 .hm-s .hm-text b { font-size: 11.5px; }
 .hm-s .hm-text small { display: none; }
 button.setup-msg { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.hm-tile:focus, .hm-tile:focus-visible { outline: none; }

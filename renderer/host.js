@@ -752,17 +752,33 @@ const HOME_TILES = { s: 4, m: 4, l: 8 };
 function homeItems(d) {
   const p = d.prefs || {};
   const order = p.order || [];
-  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e4 + (it.kind === "room" ? 0 : 1000) : i; };
+  // 沒排過順序的：場景、房間、燈
+  const rank = (it) => { const i = order.indexOf(it.id); return i < 0 ? 1e4 + ({ scene: 0, room: 1000, light: 2000 }[it.kind] ?? 3000) : i; };
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
-const homeStatus = (it) => it.reachable === false ? "沒有回應" : it.on ? (it.bri != null ? `開啟 · ${it.bri}%` : "開啟") : "關閉";
+const homeStatus = (it) => it.kind === "scene" ? "場景" : it.reachable === false ? "沒有回應" : it.on ? (it.bri != null ? `開啟 · ${it.bri}%` : "開啟") : "關閉";
 
 WIDGETS.home = {
-  mount() { loadHome(true); },
+  // 方塊是 <button>，拖曳那段程式不會處理按鈕上的點擊，所以這裡自己聽 click
+  mount(pane, inst) {
+    pane.addEventListener("click", (e) => WIDGETS.home.tap(pane, inst, e.target));
+    loadHome(true);
+  },
   tap(pane, inst, target) {
     if (target.closest("[data-setup]")) return api.mgrOpen("home");
     const t = target.closest("[data-hid]");
     if (!t) return;
+    if (t.dataset.hid.startsWith("s")) {
+      // 場景：套用，閃一下「已套用」
+      t.classList.add("on");
+      const st = t.querySelector("small");
+      if (st) st.textContent = "套用中…";
+      api.homeSet(t.dataset.hid, true).then((r) => {
+        if (st) st.textContent = r?.error ? "失敗" : "已套用";
+        setTimeout(() => { t.classList.remove("on"); loadHome(true); }, 1500);
+      });
+      return;
+    }
     const on = t.dataset.on !== "1";
     // 先在畫面上切換（感覺比較快），再真的送出；失敗的話下一次讀取會改回來
     t.dataset.on = on ? "1" : "0";
@@ -787,7 +803,7 @@ WIDGETS.home = {
     const list = homeItems(d).slice(0, HOME_TILES[inst.size] || 4);
     if (!list.length) { setHTML(pane, `<button class="setup-msg" data-setup><small>沒有要顯示的燈，點這裡選</small></button>`); return; }
     setHTML(pane, `<div class="hm hm-${inst.size}">${list.map((it) => `<button class="hm-tile ${it.on ? "on" : ""} ${it.reachable === false ? "dead" : ""}" data-hid="${esc(it.id)}" data-on="${it.on ? 1 : 0}" title="${esc(it.name)}">
-      <span class="hm-ico">${icon(it.kind === "room" ? "home" : "bulb")}</span>
+      <span class="hm-ico">${icon({ room: "home", scene: "scene" }[it.kind] || "bulb")}</span>
       <span class="hm-text"><b>${esc(it.name)}</b><small>${homeStatus(it)}</small></span></button>`).join("")}</div>`);
   },
 };

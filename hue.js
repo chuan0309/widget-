@@ -74,7 +74,7 @@ function createHue(settings, saveSettings, log = () => {}) {
   async function state() {
     if (!paired()) return { needSetup: true };
     try {
-      const [lights, groups] = await Promise.all([call(`${base()}/lights`), call(`${base()}/groups`)]);
+      const [lights, groups, scenes] = await Promise.all([call(`${base()}/lights`), call(`${base()}/groups`), call(`${base()}/scenes`).catch(() => ({}))]);
       if (Array.isArray(lights) && lights[0]?.error?.type === 1) return { needSetup: true, error: "Bridge 的金鑰失效了，請重新配對" };
       const items = [];
       for (const [id, g] of Object.entries(groups || {})) {
@@ -85,6 +85,14 @@ function createHue(settings, saveSettings, log = () => {}) {
           bri: g.action?.bri != null ? Math.round((g.action.bri / 254) * 100) : null,
           count: (g.lights || []).length,
         });
+      }
+      // 場景（Hue App 裡每個房間的「場景」）：名稱前面加房間名，點一下就套用
+      const roomName = (gid) => groups?.[gid]?.name || "";
+      for (const [id, sc] of Object.entries(scenes && !Array.isArray(scenes) ? scenes : {})) {
+        if (sc.recycle) continue; // Hue 自動產生的暫存場景
+        const gid = sc.type === "GroupScene" ? String(sc.group || "0") : "0";
+        const room = gid !== "0" ? roomName(gid) : "";
+        items.push({ id: `s${id}@${gid}`, kind: "scene", name: room ? `${room} · ${sc.name}` : sc.name, on: false });
       }
       for (const [id, l] of Object.entries(lights || {})) {
         items.push({
@@ -99,9 +107,16 @@ function createHue(settings, saveSettings, log = () => {}) {
     }
   }
 
-  // 開／關：id 是 g房間 或 l燈
+  // 開／關：id 是 g房間 或 l燈；場景（s場景@房間）是「套用」
   async function set(id, on) {
     if (!paired()) return { error: "還沒配對" };
+    const sm = String(id).match(/^s([\w-]+)@(\d+)$/);
+    if (sm) {
+      try {
+        const r = await call(`${base()}/groups/${sm[2]}/action`, "PUT", { scene: sm[1] });
+        return r?.some?.((x) => x.error) ? { error: r.find((x) => x.error).error.description } : { ok: true };
+      } catch { return { error: "連不到 Hue Bridge" }; }
+    }
     const m = String(id).match(/^([gl])(\d+)$/);
     if (!m) return { error: "不認得的裝置" };
     const url = m[1] === "g" ? `${base()}/groups/${m[2]}/action` : `${base()}/lights/${m[2]}/state`;
