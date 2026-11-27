@@ -184,9 +184,12 @@ function createHue(settings, saveSettings, log = () => {}) {
         const room = gid !== "0" ? roomName(gid) : "";
         items.push({ id: `s${id}@${gid}`, kind: "scene", name: sc.name, room: room || "全部的燈", sid: id, on: false });
       }
+      // 每盞燈在哪個房間（小組件方塊上面那一行，像 iPhone「家庭」）
+      const roomOf = {};
+      for (const g of Object.values(groups || {})) if (g.type === "Room") for (const lid of g.lights || []) roomOf[lid] = g.name;
       for (const [id, l] of Object.entries(lights || {})) {
         items.push({
-          id: "l" + id, kind: "light", name: l.name, cls: l.config?.archetype || "",
+          id: "l" + id, kind: "light", name: l.name, room: roomOf[id] || "", cls: l.config?.archetype || "",
           on: !!l.state?.on, reachable: l.state?.reachable !== false,
           bri: l.state?.bri != null ? Math.round((l.state.bri / 254) * 100) : null,
         });
@@ -202,7 +205,7 @@ function createHue(settings, saveSettings, log = () => {}) {
       }));
       for (const it of items) if (it.sid) it.colors = sceneColors.get(it.sid)?.colors || [];
       // 最後一格：全部關閉（跟 Hue 的小工具一樣）
-      items.push({ id: "off", kind: "off", name: "關閉", room: "Hue Bridge", on: false });
+      items.push({ id: "off", kind: "off", name: "全部關閉", room: "", on: false });
       return { items };
     } catch (e) {
       return { error: "連不到 Hue Bridge", offline: true };
