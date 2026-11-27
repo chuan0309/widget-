@@ -728,8 +728,8 @@ async function loadHue() {
   $("hueItems").replaceChildren(...d.items.map((it) => {
     const row = document.createElement("label");
     row.className = "row";
-    row.innerHTML = `<span class="row-icon">${icon(it.kind === "room" ? "home" : "bulb")}</span>
-      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${it.kind === "room" ? `房間 · ${it.count} 盞燈` : "燈"}</small></span>
+    row.innerHTML = `<span class="row-icon">${icon({ room: "home", scene: "scene", off: "bulb" }[it.kind] || "bulb")}</span>
+      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${it.kind === "room" ? `房間 · ${it.count} 盞燈` : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)}` : it.kind === "off" ? "一鍵關掉全部的燈（固定在最後一格）" : "燈"}</small></span>
       <input type="checkbox" class="switch" ${hidden[it.id] ? "" : "checked"} />`;
     row.querySelector("input").addEventListener("change", async (e) => {
       if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;

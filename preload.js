@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("api", {
   phoneNewToken: () => ipcRenderer.invoke("phone:new-token"),
   homeGet: () => ipcRenderer.invoke("home:get"),
   homeSet: (id, on) => ipcRenderer.invoke("home:set", id, on),
+  homeBri: (id, pct) => ipcRenderer.invoke("home:bri", id, pct),
   onHomeChanged: (cb) => ipcRenderer.on("home:changed", () => cb()),
   hueInfo: () => ipcRenderer.invoke("hue:info"),
   hueDiscover: () => ipcRenderer.invoke("hue:discover"),
