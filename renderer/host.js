@@ -777,7 +777,8 @@ const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
    冷氣：可以拖的弧形刻度盤＋模式選單；燈：大圓角亮度條（燈的顏色）＋顏色圓點；電扇：風速條
    電腦上另外可以：滾輪、方向鍵 ↑↓（←→）調整，Esc 或點外面關閉 */
 let homePanel = null;
-const AC_MODES = [[0, "關閉"], [3, "冷氣"], [4, "暖氣"], [1, "自動"], [7, "送風"], [8, "除濕"]];
+// 跟 iPhone 一樣只有：關閉、冷氣、暖氣
+const AC_MODES = [[0, "關閉"], [3, "冷氣"], [4, "暖氣"]];
 const AC_VERB = { 3: "降溫到", 4: "加溫到", 1: "自動", 7: "送風", 8: "除濕" };
 // 燈的顏色圓點：色溫用 mired（153 最冷白、500 最暖黃），彩色用 hex
 const LIGHT_SWATCHES = [
@@ -849,7 +850,7 @@ function openHomePanel(it, tile) {
       el.querySelector(".hm-verb").textContent = mode === 0 ? "關閉" : AC_VERB[mode] || "";
       el.querySelector(".hm-big").textContent = Number(value).toFixed(1);
       el.querySelector(".hm-now").textContent = it.temp != null ? `室溫 ${Number(it.temp).toFixed(1)}°` : "";
-      el.querySelector(".hm-mode span").textContent = (AC_MODES.find(([m]) => m === mode) || AC_MODES[1])[1];
+      el.querySelector(".hm-mode span").textContent = (AC_MODES.find(([m]) => m === mode) || [0, { 1: "自動", 7: "送風", 8: "除濕" }[mode] || "冷氣"])[1];
       el.querySelectorAll(".hm-menu [data-mode]").forEach((b) => b.classList.toggle("on", Number(b.dataset.mode) === mode));
       sub.textContent = it.temp != null ? `目前 ${Number(it.temp).toFixed(1)}°` : mode === 0 ? "關閉" : "";
       el.classList.toggle("off", mode === 0);
@@ -897,6 +898,7 @@ function openHomePanel(it, tile) {
     // 模式選單（照 iPhone：圓角毛玻璃、選中的打勾）
     const wrap = el.querySelector(".hm-mode-wrap");
     el.querySelector(".hm-mode").addEventListener("click", () => wrap.classList.toggle("open"));
+    el.addEventListener("pointerdown", (e) => { if (!e.target.closest(".hm-mode-wrap")) wrap.classList.remove("open"); }); // 點選單外面＝收起選單
     el.querySelectorAll(".hm-menu [data-mode]").forEach((b) => b.addEventListener("click", () => {
       wrap.classList.remove("open");
       mode = Number(b.dataset.mode); it.mode = mode || it.mode; on = mode !== 0; it.on = on;
