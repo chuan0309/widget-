@@ -777,8 +777,7 @@ const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
    冷氣：可以拖的弧形刻度盤＋模式選單；燈：大圓角亮度條（燈的顏色）＋顏色圓點；電扇：風速條
    電腦上另外可以：滾輪、方向鍵 ↑↓（←→）調整，Esc 或點外面關閉 */
 let homePanel = null;
-// 跟 iPhone 一樣只有：關閉、冷氣、暖氣
-const AC_MODES = [[0, "關閉"], [3, "冷氣"], [4, "暖氣"]];
+const AC_MODES = [[0, "關閉"], [3, "冷氣"], [4, "暖氣"], [1, "自動"], [7, "送風"], [8, "除濕"]];
 const AC_VERB = { 3: "降溫到", 4: "加溫到", 1: "自動", 7: "送風", 8: "除濕" };
 // 燈的顏色圓點：色溫用 mired（153 最冷白、500 最暖黃），彩色用 hex
 const LIGHT_SWATCHES = [
@@ -821,17 +820,38 @@ function openHomePanel(it, tile) {
            ${it.canColor ? `<label class="hm-rainbow" title="自己挑顏色"><input type="color" value="#ff8a1f" /></label>` : ""}</div>` : ""}
          <button class="hm-power"></button>`}`;
   document.body.append(el);
-  // 放在小組件旁邊（左邊放得下就放左邊，不然放右邊；上下對齊按的那一格）
+  // 放在小組件旁邊，而且不要蓋到其他小組件：左、右、上、下依序找空位；
+  // 都沒有完全空的地方，就挑蓋到最少的
   const card = tile?.closest(".card") || tile;
   const place = () => {
-    const r = (card || document.body).getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight, gap = 14;
-    const left = r.left - w - gap >= 8 ? r.left - w - gap : Math.min(innerWidth - w - 8, r.right + gap);
-    const tr = (tile || card).getBoundingClientRect();
-    const top = Math.max(8, Math.min(innerHeight - h - 8, tr.top + tr.height / 2 - h / 2));
-    el.style.left = left + "px";
-    el.style.top = top + "px";
+    const r = (card || document.body).getBoundingClientRect(), tr = (tile || card).getBoundingClientRect();
+    const w = el.offsetWidth, h = el.offsetHeight, gap = 12, M = 8;
+    const clampY = (y) => Math.max(M, Math.min(innerHeight - h - M, y));
+    const clampX = (x) => Math.max(M, Math.min(innerWidth - w - M, x));
+    const midY = clampY(tr.top + tr.height / 2 - h / 2), midX = clampX(tr.left + tr.width / 2 - w / 2);
+    // 候選位置：小組件左右兩邊一路往外、上下各種高度，還有正上方、正下方
+    const spots = [{ x: midX, y: r.top - h - gap }, { x: midX, y: r.bottom + gap }];
+    for (let kx = 0; kx <= 40; kx++) for (let ky = -14; ky <= 14; ky++) {
+      const y = clampY(midY + ky * 40);
+      spots.push({ x: r.left - w - gap - kx * 40, y }, { x: r.right + gap + kx * 40, y });
+    }
+    const others = [...document.querySelectorAll(".card")].map((c) => c.getBoundingClientRect());
+    const overlap = (s) => others.reduce((sum, o) => {
+      const ox = Math.max(0, Math.min(s.x + w, o.right) - Math.max(s.x, o.left));
+      const oy = Math.max(0, Math.min(s.y + h, o.bottom) - Math.max(s.y, o.top));
+      return sum + ox * oy;
+    }, 0);
+    const inside = (s) => s.x >= M && s.y >= M && s.x + w <= innerWidth - M && s.y + h <= innerHeight - M;
+    let best = null;
+    for (const sp of spots) {
+      const fit = inside(sp) ? sp : { x: clampX(sp.x), y: clampY(sp.y) };
+      // 先求不蓋到小組件、在螢幕內，再求離按的那格最近
+      const score = (overlap(fit) > 0 ? 1e7 + overlap(fit) : 0) + (inside(sp) ? 0 : 1e6) + Math.hypot(fit.x + w / 2 - (tr.left + tr.width / 2), fit.y + h / 2 - (tr.top + tr.height / 2));
+      if (!best || score < best.score) best = { ...fit, score };
+    }
+    el.style.left = best.x + "px";
+    el.style.top = best.y + "px";
   };
-  place();
 
   // 冷氣刻度盤：270° 的弧，16°～30°
   const C = 150, R = 118, A0 = 135, SPAN = 270;
@@ -850,7 +870,7 @@ function openHomePanel(it, tile) {
       el.querySelector(".hm-verb").textContent = mode === 0 ? "關閉" : AC_VERB[mode] || "";
       el.querySelector(".hm-big").textContent = Number(value).toFixed(1);
       el.querySelector(".hm-now").textContent = it.temp != null ? `室溫 ${Number(it.temp).toFixed(1)}°` : "";
-      el.querySelector(".hm-mode span").textContent = (AC_MODES.find(([m]) => m === mode) || [0, { 1: "自動", 7: "送風", 8: "除濕" }[mode] || "冷氣"])[1];
+      el.querySelector(".hm-mode span").textContent = (AC_MODES.find(([m]) => m === mode) || AC_MODES[1])[1];
       el.querySelectorAll(".hm-menu [data-mode]").forEach((b) => b.classList.toggle("on", Number(b.dataset.mode) === mode));
       sub.textContent = it.temp != null ? `目前 ${Number(it.temp).toFixed(1)}°` : mode === 0 ? "關閉" : "";
       el.classList.toggle("off", mode === 0);
@@ -934,6 +954,7 @@ function openHomePanel(it, tile) {
   el.addEventListener("pointermove", touch, { passive: true });
   touch();
   render();
+  place(); // 內容畫好、高度確定之後才決定放哪裡
   requestAnimationFrame(() => el.classList.add("show"));
 }
 // 點面板以外的地方、或切到別的視窗：關掉
