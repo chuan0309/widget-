@@ -714,27 +714,90 @@ async function loadHue() {
       if (r.ok) { toast("Hue 配對成功"); loadHue(); }
       else $("hueMsg").textContent = r.error;
     });
-    return;
-  }
+  } else {
   box.innerHTML = `<div class="row"><span class="row-icon blue">${icon("check_circle")}</span>
       <span class="row-text"><b>已連接 Hue Bridge</b><small>${escapeHTML(info.ip)}</small></span>
       <button class="btn small ghost" id="hueUnpair">${icon("logout")}解除配對</button></div>`;
   $("hueUnpair").addEventListener("click", async () => { await window.api.hueUnpair(); toast("已解除配對"); loadHue(); });
 
+  }
+  // Matter（Tapo 冷氣、電扇…）
+  const mi = await window.api.matterInfo();
+  $("matterBox").innerHTML = mi.paired
+    ? `<div class="row"><span class="row-icon blue">${icon("check_circle")}</span>
+        <span class="row-text"><b>已加入 Matter 設備</b><small>想再加一台：在 iPhone 家庭 App 對那台按「開啟配對模式」，把配對碼貼到下面</small></span>
+        <button class="btn small ghost" id="matterUnpair">${icon("logout")}全部移除</button></div>`
+    : "";
+  $("matterBox").innerHTML += `<div class="row"><input class="grow" id="matterCode" placeholder="11 碼配對碼，例如 3497-011-2332" spellcheck="false" />
+      <button class="btn small" id="matterPair">配對</button></div>
+    <div class="row"><span class="row-text"><small id="matterMsg">iPhone「家庭」App → 長按設備 → 往下滑到最底 →「開啟配對模式」→ 複製配對碼。第一次配對時 Windows 可能會問要不要允許網路存取，請按允許。</small></span></div>`;
+  $("matterPair").addEventListener("click", async () => {
+    $("matterPair").disabled = true;
+    $("matterMsg").textContent = "配對中…（大概 30 秒～1 分鐘）";
+    const r = await window.api.matterPair($("matterCode").value);
+    $("matterPair").disabled = false;
+    if (r.ok) { toast("Matter 設備加入了"); loadHue(); }
+    else $("matterMsg").textContent = r.error;
+  });
+  $("matterUnpair")?.addEventListener("click", async () => {
+    if (!confirm("從 Glass Widgets 移除所有 Matter 設備？（iPhone 家庭、Tapo App 不受影響）")) return;
+    await window.api.matterUnpair();
+    toast("已移除");
+    loadHue();
+  });
+  if (!info.paired && !mi.paired) return;
   const d = await window.api.homeGet();
   $("hueItemsWrap").hidden = false;
   if (!d.items) { $("hueItems").innerHTML = `<div class="row"><span class="row-text"><b class="err">${escapeHTML(d.error || "讀不到")}</b></span></div>`; return; }
   const hidden = { ...(info.hidden || {}) };
-  $("hueItems").replaceChildren(...d.items.map((it) => {
-    const row = document.createElement("label");
+  const sceneMode = { ...(info.sceneMode || {}) };
+  const icons = { ...(info.icons || {}) };
+  const MODES = [["auto", "照 Hue App", null], ["static", "靜態", null], ["slow", "動態・慢", 0.25], ["mid", "動態・中", 0.55], ["fast", "動態・快", 0.9]];
+  const modeKey = (m) => (!m || m.mode === "auto" ? "auto" : m.mode !== "dynamic" ? "static" : m.speed < 0.4 ? "slow" : m.speed < 0.75 ? "mid" : "fast");
+  // 全部隱藏／全部顯示（場景很多時，先全部藏起來再打開想要的幾個）
+  const bulk = document.createElement("div");
+  bulk.className = "row";
+  bulk.innerHTML = `<span class="row-text"><b>一次設定</b><small>先「全部隱藏」，再把想放在小組件上的打開</small></span>
+    <button class="btn small ghost" data-all="hide">全部隱藏</button><button class="btn small ghost" data-all="show">全部顯示</button>`;
+  bulk.querySelectorAll("[data-all]").forEach((b) => b.addEventListener("click", async () => {
+    const hide = b.dataset.all === "hide";
+    for (const it of d.items) if (hide) hidden[it.id] = true; else delete hidden[it.id];
+    await window.api.huePrefs({ hidden });
+    toast(hide ? "全部隱藏了，打開想要的就好" : "全部顯示");
+    loadHue();
+  }));
+  $("hueItems").replaceChildren(bulk, ...d.items.map((it) => {
+    const row = document.createElement("div");
     row.className = "row";
-    row.innerHTML = `<span class="row-icon">${icon({ room: "home", scene: "scene", off: "bulb" }[it.kind] || "bulb")}</span>
-      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${it.kind === "room" ? `房間 · ${it.count} 盞燈` : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)}` : it.kind === "off" ? "一鍵關掉全部的燈（固定在最後一格）" : "燈"}</small></span>
-      <input type="checkbox" class="switch" ${hidden[it.id] ? "" : "checked"} />`;
+    const sub = it.kind === "room" ? `房間 · ${it.count} 盞燈`
+      : it.kind === "scene" && it.smart ? `智慧場景 · ${escapeHTML(it.room)} · 照時間自動變化（時段在 Hue App 設定）`
+      : it.kind === "scene" ? `場景 · ${escapeHTML(it.room)} · Hue App：${it.autoDynamic ? "自動播放（動態）" : "靜態"}${it.canDynamic ? "" : "（只有靜態）"}`
+      : it.kind === "off" ? "一鍵關掉全部的燈"
+      : it.kind === "ac" ? `冷氣（Matter）${it.setpoint != null ? ` · 設定 ${it.setpoint}°` : ""}`
+      : it.kind === "fan" ? "電扇（Matter）" : it.kind === "switch" ? "開關（Matter）" : "燈";
+    const modeSel = it.kind === "scene" && !it.smart && it.canDynamic
+      ? `<select class="select small">${MODES.map(([k, n]) => `<option value="${k}" ${modeKey(sceneMode[it.id]) === k ? "selected" : ""}>${n}</option>`).join("")}</select>` : "";
+    const iconSel = `<select class="select small" title="圖示">${HOME_ICON_CHOICES.map(([k, n]) => `<option value="${k}" ${(icons[it.id] || "") === k ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+    row.innerHTML = `<span class="row-icon">${icon(homeIconName(it, icons))}</span>
+      <span class="row-text"><b>${escapeHTML(it.name)}</b><small>${sub}</small></span>
+      ${iconSel}${modeSel}<input type="checkbox" class="switch" title="顯示在小組件" ${hidden[it.id] ? "" : "checked"} />`;
     row.querySelector("input").addEventListener("change", async (e) => {
       if (e.target.checked) delete hidden[it.id]; else hidden[it.id] = true;
       await window.api.huePrefs({ hidden });
       toast(e.target.checked ? `會顯示「${it.name}」` : `不顯示「${it.name}」`);
+    });
+    const [iconBox, modeBox] = row.querySelectorAll("select");
+    iconBox.addEventListener("change", async (e) => {
+      if (e.target.value) icons[it.id] = e.target.value; else delete icons[it.id];
+      row.querySelector(".row-icon").innerHTML = icon(homeIconName(it, icons));
+      await window.api.huePrefs({ icons });
+      toast(`「${it.name}」換圖示了`);
+    });
+    modeBox?.addEventListener("change", async (e) => {
+      const [k, label, speed] = MODES.find(([key]) => key === e.target.value);
+      sceneMode[it.id] = k === "auto" ? { mode: "auto" } : speed == null ? { mode: "static" } : { mode: "dynamic", speed };
+      await window.api.huePrefs({ sceneMode });
+      toast(`「${it.name}」改成${label}（下次點這個場景時套用）`);
     });
     return row;
   }));

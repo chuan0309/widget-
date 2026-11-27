@@ -11,6 +11,7 @@ const { createGoogle } = require("./google");
 const { createCwa } = require("./cwa");
 const { createPhonePush } = require("./phone-push");
 const { createHue } = require("./hue");
+const { createMatterHome } = require("./matter-home");
 
 // Chromium 會判斷視窗「有沒有被擋住」，被擋住就不畫。我們的小組件視窗是放在桌面最底層的
 // 全螢幕透明視窗，Windows 上常被誤判成「一直被擋住」，結果整個不畫、小組件全部不見。
@@ -1050,11 +1051,49 @@ ipcMain.on("popup:close", () => { clearTimeout(popupTimer); popupDevice = null; 
 
 /* ───────── 智慧家庭：Philips Hue（本機 Bridge） ───────── */
 const hue = createHue(settings, saveSettings, log);
-ipcMain.handle("home:get", async () => ({ ...(await hue.state()), prefs: hue.info() }));
+// Matter（Tapo 冷氣、電扇…）：配對過才啟動（matter.js 很大，沒用到就不要載）
+let matter = null;
+const matterHome = () => (matter ||= createMatterHome({ storageDir: path.join(app.getPath("userData"), "matter"), log }));
+const matterOn = () => !!settings.matter?.paired;
+async function matterItems() {
+  if (!matterOn()) return [];
+  try { return await matterHome().state(); } catch (e) { log("matter state failed", e.message); return []; }
+}
+ipcMain.handle("home:get", async () => {
+  const [h, m] = await Promise.all([hue.state(), matterItems()]);
+  const prefs = hue.info();
+  if (!m.length) return { ...h, prefs };
+  // 有 Matter 設備：Hue 沒設定也照樣顯示 Matter 的方塊
+  return { items: [...m, ...(h.items || [])], prefs, hueError: h.items ? undefined : h.error };
+});
 ipcMain.handle("home:set", async (_e, id, on) => {
-  const r = await hue.set(String(id), !!on);
+  const r = String(id).startsWith("m") ? await matterHome().set(String(id), { on: !!on }) : await hue.set(String(id), !!on);
   sendToKind("home", "home:changed");
   return r;
+});
+// 調整：燈＝{ bri }、冷氣＝{ setpoint }、電扇＝{ pct }
+ipcMain.handle("home:adjust", async (_e, id, v = {}) => {
+  id = String(id);
+  if (id.startsWith("m")) return matterHome().set(id, {
+    ...(typeof v.setpoint === "number" ? { setpoint: v.setpoint } : {}),
+    ...(typeof v.pct === "number" ? { pct: v.pct } : {}),
+    ...([1, 3, 4, 7, 8].includes(v.mode) ? { mode: v.mode } : {}),
+  });
+  if (v.color) return hue.setColor(id, v.color);
+  return hue.setBri(id, Number(v.bri));
+});
+ipcMain.handle("matter:info", () => ({ paired: matterOn() }));
+ipcMain.handle("matter:pair", async (_e, code) => {
+  const r = await matterHome().pair(String(code || ""));
+  if (r.ok) { settings.matter = { paired: true }; saveSettings(); sendToKind("home", "home:changed"); }
+  return r;
+});
+ipcMain.handle("matter:unpair", async () => {
+  if (matterOn()) await matterHome().unpairAll().catch(() => {});
+  settings.matter = { paired: false };
+  saveSettings();
+  sendToKind("home", "home:changed");
+  return { ok: true };
 });
 ipcMain.handle("home:bri", (_e, id, pct) => hue.setBri(String(id), Number(pct)));
 ipcMain.handle("hue:info", () => hue.info());
@@ -1155,6 +1194,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("before-quit", () => {
     app.isQuitting = true;
+    matter?.close();
     helper?.kill();
   });
   app.on("window-all-closed", () => {}); // 關掉所有小組件也不要結束，留在系統匣

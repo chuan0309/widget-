@@ -372,3 +372,4 @@ select.select option { background: #2c2c2e; }
 .ph-steps { margin: 8px 0 0; padding-left: 22px; line-height: 1.7; }
 .ph-steps li { margin: 2px 0; }
 #phBox .row-text small { white-space: normal; }
+select.select.small { margin-right: 12px; min-width: 0; padding-top: 4px; padding-bottom: 4px; font-size: 13px; }

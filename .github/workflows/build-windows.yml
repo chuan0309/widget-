@@ -27,6 +27,11 @@ jobs:
       - name: Install
         run: npm ci
 
+      # Matter：開一台模擬的 Matter 冷氣＋電扇，用 matter-home.js 配對、控制，確認真的有變
+      - name: Matter selftest
+        timeout-minutes: 4
+        run: node tests/matter-selftest.js
+
       # 先檢查 PowerShell 腳本：語法對不對、裡面的 C# 能不能編譯、背景小幫手跑得起來
       - name: Check PowerShell scripts
         shell: powershell

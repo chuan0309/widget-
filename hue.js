@@ -38,6 +38,16 @@ function xyToRgb(x, y, bri = 254) {
   const gam = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
   return `rgb(${[r, g, b].map((v) => Math.round(gam(v) * 255)).join(",")})`;
 }
+// CSS 顏色 → Hue 的 xy（Philips 公布的換算：sRGB → 線性 → CIE XYZ → xy）
+function hexToXy(hex) {
+  const lin = (v) => (v > 0.04045 ? ((v + 0.055) / 1.055) ** 2.4 : v / 12.92);
+  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255));
+  const X = r * 0.664511 + g * 0.154324 + b * 0.162028;
+  const Y = r * 0.283881 + g * 0.668433 + b * 0.047685;
+  const Z = r * 0.000088 + g * 0.07231 + b * 0.986039;
+  const sum = X + Y + Z || 1;
+  return [Number((X / sum).toFixed(4)), Number((Y / sum).toFixed(4))];
+}
 function ctToRgb(ct) {
   const k = 1e6 / ct / 100; // 色溫（百 K）
   const r = k <= 66 ? 255 : 329.7 * (k - 60) ** -0.1332;
@@ -83,6 +93,7 @@ const v2Color = (a = {}) => {
 };
 
 function createHue(settings, saveSettings, log = () => {}) {
+  const sceneAuto = new Map(); // 場景 id → Hue App 裡有沒有開「自動播放」（套用時照這個）
   const sceneColors = new Map(); // 場景 id → { at, colors }（場景很少改，一小時讀一次）
   const H = () => (settings.hue ||= { ip: "", key: "", hidden: {}, order: [] });
   const base = () => `http://${H().ip}/api/${unseal(H().key)}`;
@@ -143,13 +154,20 @@ function createHue(settings, saveSettings, log = () => {}) {
       const byId = new Map(sc.data.map((x) => [x.id, x]));
       const items = [];
       // 智慧場景（自然光、大自然的色彩…）：照時間自動換；顏色拿它裡面各時段場景的顏色
+      // 不屬於任何房間／區域的場景（Hue 內部用的、或房間刪掉後留下的）Hue App 不會顯示，這裡也不要
+      const orphan = (g) => names.size > 0 && !names.has(g?.rid);
       for (const z of smart.data || []) {
+        if (orphan(z.group)) continue;
         const targets = (z.week_timeslots || []).flatMap((w) => (w.timeslots || []).map((t) => t.target?.rid)).filter(Boolean);
         const cols = [...new Set(targets.flatMap((rid) => (byId.get(rid) ? colorsOf(byId.get(rid)) : [])))].slice(0, 3);
         items.push({ id: "z" + z.id, kind: "scene", smart: true, name: z.metadata?.name || "智慧場景", room: names.get(z.group?.rid) || "Hue", on: z.state === "active", colors: cols });
       }
       for (const x of sc.data) {
-        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", colors: colorsOf(x) });
+        if (orphan(x.group)) continue;
+        // 有色盤的場景才能「動態」（顏色在色盤裡流動）
+        const canDynamic = (x.palette?.color?.length || 0) + (x.palette?.color_temperature?.length || 0) > 0;
+        sceneAuto.set("v" + x.id, !!x.auto_dynamic);
+        items.push({ id: "v" + x.id, kind: "scene", name: x.metadata?.name || "場景", room: names.get(x.group?.rid) || "Hue", on: !!x.status?.active && x.status.active !== "inactive", dynamicNow: x.status?.active === "dynamic_palette", canDynamic, autoDynamic: !!x.auto_dynamic, colors: colorsOf(x) });
       }
       return items;
     } catch (e) {
@@ -173,6 +191,7 @@ function createHue(settings, saveSettings, log = () => {}) {
           on: !!g.state?.any_on, all: !!g.state?.all_on,
           bri: g.action?.bri != null ? Math.round((g.action.bri / 254) * 100) : null,
           count: (g.lights || []).length,
+          color: stateColor({ ...(g.action || {}), on: true }), canColor: !!g.action?.xy, canCt: !!g.action?.ct,
         });
       }
       if (v2) items.push(...v2);
@@ -192,6 +211,8 @@ function createHue(settings, saveSettings, log = () => {}) {
           id: "l" + id, kind: "light", name: l.name, room: roomOf[id] || "", cls: l.config?.archetype || "",
           on: !!l.state?.on, reachable: l.state?.reachable !== false,
           bri: l.state?.bri != null ? Math.round((l.state.bri / 254) * 100) : null,
+          // 燈現在的顏色（面板的亮度條用這個顏色）；能不能調顏色／色溫
+          color: stateColor({ ...(l.state || {}), on: true }), canColor: !!l.state?.xy, canCt: !!l.state?.ct,
         });
       }
       // 每個場景裡燈的顏色（要一個一個問，有快取）
@@ -222,8 +243,19 @@ function createHue(settings, saveSettings, log = () => {}) {
     const vm = String(id).match(/^([vz])([0-9a-f-]{36})$/i);
     if (vm) {
       try {
-        const r = await v2call(H().ip, unseal(H().key), vm[1] === "z" ? `smart_scene/${vm[2]}` : `scene/${vm[2]}`, "PUT",
-          { recall: { action: vm[1] === "z" ? "activate" : "active" } });
+        const key = unseal(H().key);
+        if (vm[1] === "z") {
+          const r = await v2call(H().ip, key, `smart_scene/${vm[2]}`, "PUT", { recall: { action: "activate" } });
+          if (r?.errors?.length) log("hue smart scene error", r.errors[0].description);
+          return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
+        }
+        // 一般場景：預設照 Hue App 的設定（有開「自動播放」就動態，速度、亮度用場景自己存的）；
+        // 使用者在管理程式另外選了靜態／動態（慢、中、快）才照那個
+        const pref = H().sceneMode?.[id] || { mode: "auto" };
+        const dynamic = pref.mode === "dynamic" || (pref.mode === "auto" && sceneAuto.get(id));
+        if (pref.mode === "dynamic" && typeof pref.speed === "number") await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { speed: pref.speed }).catch(() => {});
+        const r = await v2call(H().ip, key, `scene/${vm[2]}`, "PUT", { recall: { action: dynamic ? "dynamic_palette" : "active" } });
+        if (r?.errors?.length) log("hue scene error", r.errors[0].description);
         return r?.errors?.length ? { error: r.errors[0].description } : { ok: true };
       } catch { return { error: "連不到 Hue Bridge" }; }
     }
@@ -246,6 +278,22 @@ function createHue(settings, saveSettings, log = () => {}) {
   }
 
   // 亮度 1～100%（會順便打開）：id 是 g房間 或 l燈
+  // 顏色：{ ct: mired（153 冷白～500 暖黃） } 或 { hex: "#ff8800" }（會換成 Hue 的 xy 色座標）
+  async function setColor(id, c = {}) {
+    if (!paired()) return { error: "還沒配對" };
+    const m = String(id).match(/^([gl])(\d+)$/);
+    if (!m) return { error: "這個不能調顏色" };
+    let body = { on: true };
+    if (typeof c.ct === "number") body.ct = Math.round(Math.min(500, Math.max(153, c.ct)));
+    else if (/^#[0-9a-f]{6}$/i.test(c.hex || "")) body.xy = hexToXy(c.hex);
+    else return { error: "顏色格式不對" };
+    const url = m[1] === "g" ? `${base()}/groups/${m[2]}/action` : `${base()}/lights/${m[2]}/state`;
+    try {
+      const r = await call(url, "PUT", body);
+      return r?.some?.((x) => x.error) ? { error: r.find((x) => x.error).error.description } : { ok: true };
+    } catch { return { error: "連不到 Hue Bridge" }; }
+  }
+
   async function setBri(id, pct) {
     if (!paired()) return { error: "還沒配對" };
     const m = String(id).match(/^([gl])(\d+)$/);
@@ -259,10 +307,20 @@ function createHue(settings, saveSettings, log = () => {}) {
   }
 
   return {
-    discover, pair, unpair, state, set, setBri,
-    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [] }),
-    setPrefs({ hidden, order } = {}) {
-      if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 20), true]));
+    discover, pair, unpair, state, set, setBri, setColor,
+    info: () => ({ paired: paired(), ip: H().ip, hidden: H().hidden || {}, order: H().order || [], sceneMode: H().sceneMode || {}, icons: H().icons || {} }),
+    setPrefs({ hidden, order, sceneMode, icons } = {}) {
+      if (icons && typeof icons === "object") {
+        H().icons = Object.fromEntries(Object.entries(icons).filter(([, v]) => /^[a-z_]{1,20}$/.test(v)).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), v]));
+      }
+      // id 最長是 "v" + 36 字的 UUID，以前切到 20 字會對不上（藏不起來）
+      if (hidden && typeof hidden === "object") H().hidden = Object.fromEntries(Object.entries(hidden).filter(([, v]) => v).map(([k]) => [String(k).slice(0, 64), true]));
+      if (sceneMode && typeof sceneMode === "object") {
+        H().sceneMode = Object.fromEntries(Object.entries(sceneMode).slice(0, 300).map(([k, v]) => [String(k).slice(0, 64), {
+          mode: ["dynamic", "static"].includes(v?.mode) ? v.mode : "auto",
+          speed: Math.min(1, Math.max(0, Number(v?.speed) || 0.5)),
+        }]));
+      }
       if (Array.isArray(order)) H().order = order.map(String).slice(0, 200);
       saveSettings();
     },

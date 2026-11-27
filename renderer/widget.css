@@ -398,3 +398,48 @@ body.bg-light .hm-tile.on { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0
 .hm-tile.adjust { background: linear-gradient(90deg, rgba(255, 255, 255, 0.96) var(--bri, 50%), rgb(var(--fg) / 0.18) var(--bri, 50%)); color: #000; transform: scale(1.04); }
 .hm-tile.adjust .hm-ico svg { fill: #ffcc00; }
 .hm-tile.adjust .hm-text small { color: #000; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* 冷氣：左上角是設定溫度（像 iPhone 家庭的「23.0°」） */
+.hm-temp { font-family: "Inter", "Noto Sans TC", "Segoe UI", sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.hm-tile.on .hm-temp { color: #000; }
+
+/* ───────── 家庭：長按跳出的控制面板（照 iPhone「家庭」） ───────── */
+.hm-pop { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; background: rgba(0, 0, 0, 0); transition: background 0.22s; }
+.hm-pop.show { background: rgba(10, 10, 14, 0.5); backdrop-filter: blur(26px) saturate(1.2); }
+.hm-pop-box {
+  display: flex; flex-direction: column; align-items: center; gap: 22px; color: #fff; user-select: none;
+  font-family: "Inter", "Noto Sans TC", "Segoe UI", sans-serif;
+  transform: scale(0.9); opacity: 0; transition: transform 0.28s var(--ease-spring, ease), opacity 0.2s;
+}
+.hm-pop.show .hm-pop-box { transform: none; opacity: 1; }
+.hm-pop-title { display: flex; flex-direction: column; align-items: center; gap: 4px; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35); }
+.hm-pop-title b { font-size: 26px; font-weight: 700; }
+.hm-pop-title small { font-size: 15px; font-weight: 600; opacity: 0.85; }
+/* 燈／電扇：大圓角條，顏色從下往上填 */
+.hm-pill { --c: #ffe2c0; position: relative; width: 120px; height: 300px; border-radius: 34px; overflow: hidden; background: rgba(120, 120, 128, 0.45); cursor: ns-resize; touch-action: none; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3); }
+.hm-pill i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); transition: height 0.08s, background 0.3s; }
+.hm-pill-ico { position: absolute; left: 0; right: 0; bottom: 22px; display: grid; place-items: center; }
+.hm-pill-ico svg { width: 30px; height: 30px; fill: #fff; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35)); }
+.hm-swatches { display: flex; gap: 16px; }
+.hm-swatches button, .hm-rainbow { width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); cursor: pointer; padding: 0; box-sizing: border-box; }
+.hm-swatches button:hover { transform: scale(1.08); }
+.hm-rainbow { position: relative; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red); border: 0; }
+.hm-rainbow::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgba(40, 40, 44, 0.9); }
+.hm-rainbow input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.hm-power { border: 0; border-radius: 18px; padding: 9px 26px; background: rgba(120, 120, 128, 0.45); color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+/* 冷氣：270° 弧形刻度盤 */
+.hm-dial { position: relative; width: 300px; height: 300px; }
+.hm-dial svg { width: 100%; height: 100%; cursor: grab; touch-action: none; overflow: visible; }
+.hm-dial-track { fill: none; stroke: rgba(120, 120, 128, 0.45); stroke-width: 34; stroke-linecap: round; }
+.hm-dial-fill { fill: none; stroke-width: 34; stroke-linecap: round; transition: stroke 0.3s; }
+.hm-dial-knob { fill: #fff; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35)); }
+.hm-dial-dot { fill: rgba(0, 0, 0, 0.18); }
+.hm-pop.off .hm-dial-fill { stroke: rgba(160, 160, 170, 0.7) !important; }
+.hm-dial-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.hm-verb { font-size: 17px; font-weight: 700; opacity: 0.6; }
+.hm-big { font-size: 66px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; }
+.hm-now { font-size: 15px; font-weight: 600; margin-top: 8px; }
+.hm-mode {
+  appearance: none; border: 0; border-radius: 30px; padding: 14px 70px; text-align: center; text-align-last: center;
+  background: rgba(120, 120, 128, 0.45); color: #fff; font: inherit; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.hm-mode option { background: #2c2c2e; color: #fff; }

@@ -747,6 +747,13 @@ async function loadHome(force = false) {
   if (!homeAdjusting) refresh("home"); // 正在長按調亮度時不要重畫，不然手指下的方塊會不見
 }
 let homeAdjusting = false;
+// 每種方塊可以調什麼：燈＝亮度、冷氣＝溫度、電扇＝風速
+const HOME_ADJUST = {
+  light: { min: 1, max: 100, step: 5, get: (it) => (it.on ? it.bri ?? 100 : 1), clamp: (v) => Math.round(Math.min(100, Math.max(1, v))), label: (v) => `${v}%`, send: (v) => ({ bri: v }), apply: (it, v) => { it.on = true; it.bri = v; } },
+  ac: { min: 16, max: 30, step: 1, get: (it) => it.setpoint ?? 25, clamp: (v) => Math.round(Math.min(30, Math.max(16, v))), label: (v) => `設定 ${v}°`, send: (v) => ({ setpoint: v }), apply: (it, v) => { it.setpoint = v; } },
+  fan: { min: 0, max: 100, step: 10, get: (it) => it.pct ?? 0, clamp: (v) => Math.round(Math.min(100, Math.max(0, v)) / 10) * 10, label: (v) => (v ? `風速 ${v}%` : "關閉"), send: (v) => ({ pct: v }), apply: (it, v) => { it.pct = v; it.on = v > 0; } },
+};
+HOME_ADJUST.room = HOME_ADJUST.light;
 setInterval(() => loadHome(), 10 * 1000); // 在 Hue App 或牆上開關改了，10 秒內跟著變
 api.onHomeChanged?.(() => loadHome(true));
 
@@ -760,39 +767,202 @@ function homeItems(d) {
   return (d.items || []).filter((it) => !p.hidden?.[it.id]).sort((a, b) => rank(a) - rank(b));
 }
 // 方塊：左上角圖示，下面兩行「房間／名稱」（照 iPhone「家庭」小工具）
-const homeIcon = (it) => icon({ room: "home", scene: "scene", off: "bulb" }[it.kind] || (it.kind === "scene" && it.smart ? "schedule" : "bulb"));
-const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.room || "";
+const homeIcon = (it) => icon(homeIconName(it, store.home?.prefs?.icons));
+const homeTop = (it) => it.reachable === false ? "沒有回應" : it.kind === "room" ? it.name : it.kind === "fan" && it.on && it.pct ? `風速 ${it.pct}%` : it.room || "";
 const homeName = (it) => it.kind === "room" ? "燈光" : it.name;
+
+/* ───────── 家庭：長按跳出的控制面板（照 iPhone「家庭」） ─────────
+   冷氣：可以拖的弧形刻度盤＋模式選單；燈：大圓角亮度條（燈的顏色）＋顏色圓點；電扇：風速條
+   電腦上另外可以：滾輪、方向鍵 ↑↓（←→）調整，Esc 或點外面關閉 */
+let homePanel = null;
+const AC_MODES = [[0, "關閉"], [3, "冷氣"], [4, "暖氣"], [1, "自動"], [7, "送風"], [8, "除濕"]];
+const AC_VERB = { 3: "降溫到", 4: "加溫到", 1: "自動", 7: "送風", 8: "除濕" };
+// 燈的顏色圓點：色溫用 mired（153 最冷白、500 最暖黃），彩色用 hex
+const LIGHT_SWATCHES = [
+  { ct: 454, css: "#ffb46b" }, { ct: 300, css: "#ffe2c0" }, { ct: 233, css: "#fff4e6" },
+  { hex: "#ff8a1f", css: "#ff8a1f" }, { ct: 160, css: "#d6e4ff" },
+];
+function closeHomePanel() {
+  if (!homePanel) return;
+  const p = homePanel;
+  homePanel = null;
+  clearTimeout(p.sendTimer);
+  p.flush();
+  p.el.classList.remove("show");
+  setTimeout(() => p.el.remove(), 220);
+  homeAdjusting = false;
+  setTimeout(() => loadHome(true), 600);
+}
+function openHomePanel(it) {
+  closeHomePanel();
+  homeAdjusting = true;
+  setInteractive(true);
+  const spec = HOME_ADJUST[it.kind];
+  const isAc = it.kind === "ac", isLight = it.kind === "light" || it.kind === "room";
+  let value = spec.get(it), on = !!it.on, mode = it.on ? it.mode ?? 3 : 0, color = it.color || "#ffe2c0";
+  const el = document.createElement("div");
+  el.className = "hm-pop";
+  el.innerHTML = `<div class="hm-pop-box">
+      <div class="hm-pop-title"><b>${esc(homeName(it) === "燈光" ? `${it.name} 燈光` : homeName(it))}</b><small class="hm-pop-sub"></small></div>
+      ${isAc ? `<div class="hm-dial"><svg viewBox="0 0 300 300">
+            <defs><linearGradient id="hmCool" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#3f7cf0"/><stop offset="1" stop-color="#7cc8ff"/></linearGradient>
+              <linearGradient id="hmHeat" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#ff7a1a"/><stop offset="1" stop-color="#ffb347"/></linearGradient>
+              <linearGradient id="hmAuto" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2fbf71"/><stop offset="1" stop-color="#7be0a8"/></linearGradient></defs>
+            <path class="hm-dial-track" d=""/><path class="hm-dial-fill" d=""/><circle class="hm-dial-knob" r="17"/><circle class="hm-dial-dot" r="5"/></svg>
+          <div class="hm-dial-mid"><small class="hm-verb"></small><b class="hm-big"></b><small class="hm-now"></small></div></div>
+          <select class="hm-mode">${AC_MODES.map(([m, n]) => `<option value="${m}">${n}</option>`).join("")}</select>`
+      : `<div class="hm-pill"><i></i><span class="hm-pill-ico">${icon(isLight ? "bulb" : "fan")}</span></div>
+         ${isLight && (it.canColor || it.canCt) ? `<div class="hm-swatches">${LIGHT_SWATCHES.filter((w) => (w.hex ? it.canColor : it.canCt)).map((w, i) => `<button data-sw="${i}" style="background:${w.css}"></button>`).join("")}
+           ${it.canColor ? `<label class="hm-rainbow" title="自己挑顏色"><input type="color" value="#ff8a1f" /></label>` : ""}</div>` : ""}
+         <button class="hm-power"></button>`}
+    </div>`;
+  document.body.append(el);
+
+  // 冷氣刻度盤：270° 的弧，16°～30°
+  const C = 150, R = 118, A0 = 135, SPAN = 270;
+  const pt = (deg) => [C + R * Math.cos((deg * Math.PI) / 180), C + R * Math.sin((deg * Math.PI) / 180)];
+  const arc = (d0, d1) => { const [x0, y0] = pt(d0), [x1, y1] = pt(d1); return `M${x0} ${y0} A${R} ${R} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+  const frac = () => (value - spec.min) / (spec.max - spec.min);
+  const render = () => {
+    const sub = el.querySelector(".hm-pop-sub");
+    if (isAc) {
+      const deg = A0 + frac() * SPAN, [kx, ky] = pt(deg);
+      el.querySelector(".hm-dial-track").setAttribute("d", arc(A0, A0 + SPAN));
+      const fill = el.querySelector(".hm-dial-fill");
+      fill.setAttribute("d", arc(A0, Math.max(A0 + 0.5, deg)));
+      fill.setAttribute("stroke", mode === 4 ? "url(#hmHeat)" : mode === 1 ? "url(#hmAuto)" : "url(#hmCool)");
+      for (const c of el.querySelectorAll(".hm-dial-knob, .hm-dial-dot")) { c.setAttribute("cx", kx); c.setAttribute("cy", ky); }
+      el.querySelector(".hm-verb").textContent = mode === 0 ? "關閉" : AC_VERB[mode] || "";
+      el.querySelector(".hm-big").textContent = Number(value).toFixed(1);
+      el.querySelector(".hm-now").textContent = it.temp != null ? `室溫 ${Number(it.temp).toFixed(1)}°` : "";
+      el.querySelector(".hm-mode").value = String(mode);
+      sub.textContent = it.temp != null ? `目前 ${Number(it.temp).toFixed(1)}°` : mode === 0 ? "關閉" : "";
+      el.classList.toggle("off", mode === 0);
+    } else {
+      el.querySelector(".hm-pill i").style.height = (on ? frac() * 100 : 0) + "%";
+      el.querySelector(".hm-pill").style.setProperty("--c", isLight ? color : "#ffffff");
+      sub.textContent = on ? spec.label(value) : "關閉";
+      const pw = el.querySelector(".hm-power");
+      if (pw) pw.textContent = on ? "關閉" : "打開";
+    }
+  };
+  // 改了之後 0.4 秒才送（拖的時候不會一直送）
+  const pending = {};
+  const flush = () => {
+    const v = { ...pending };
+    for (const k of Object.keys(pending)) delete pending[k];
+    if ("mode" in v) api.homeAdjust(it.id, { mode: v.mode });
+    if ("on" in v) api.homeSet(it.id, v.on);
+    if ("color" in v) api.homeAdjust(it.id, { color: v.color });
+    if ("value" in v) api.homeAdjust(it.id, spec.send(v.value));
+  };
+  homePanel = { el, flush, sendTimer: null };
+  const queue = (k, v) => { pending[k] = v; clearTimeout(homePanel.sendTimer); homePanel.sendTimer = setTimeout(flush, 400); };
+  const setValue = (v) => {
+    const nv = spec.clamp(v);
+    if (nv === value && (on || isAc)) return;
+    value = nv;
+    if (!isAc && !on) { on = true; }
+    spec.apply(it, value); render(); queue("value", value);
+  };
+  const step = (dir) => setValue(value + dir * spec.step);
+
+  if (isAc) {
+    const svg = el.querySelector(".hm-dial svg");
+    const fromPointer = (e) => {
+      const r = svg.getBoundingClientRect();
+      let a = (Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)) * 180) / Math.PI;
+      a = ((a - A0) % 360 + 360) % 360;              // 從刻度盤起點量起
+      if (a > SPAN) a = a > SPAN + (360 - SPAN) / 2 ? 0 : SPAN; // 下面缺口：靠近哪端就到哪端
+      setValue(spec.min + (a / SPAN) * (spec.max - spec.min));
+    };
+    svg.addEventListener("pointerdown", (e) => { svg.setPointerCapture(e.pointerId); svg.dataset.drag = "1"; fromPointer(e); });
+    svg.addEventListener("pointermove", (e) => svg.dataset.drag && fromPointer(e));
+    svg.addEventListener("pointerup", () => delete svg.dataset.drag);
+    el.querySelector(".hm-mode").addEventListener("change", (e) => {
+      mode = Number(e.target.value); it.mode = mode || it.mode; on = mode !== 0; it.on = on;
+      render();
+      if (mode === 0) queue("on", false); else { delete pending.on; queue("mode", mode); }
+    });
+  } else {
+    const pill = el.querySelector(".hm-pill");
+    const fromY = (y) => { const b = pill.getBoundingClientRect(); return spec.min + (1 - (y - b.top) / b.height) * (spec.max - spec.min); };
+    pill.addEventListener("pointerdown", (e) => { pill.setPointerCapture(e.pointerId); pill.dataset.drag = "1"; setValue(fromY(e.clientY)); });
+    pill.addEventListener("pointermove", (e) => pill.dataset.drag && setValue(fromY(e.clientY)));
+    pill.addEventListener("pointerup", () => delete pill.dataset.drag);
+    el.querySelectorAll("[data-sw]").forEach((b) => b.addEventListener("click", () => {
+      const w = LIGHT_SWATCHES[Number(b.dataset.sw)];
+      color = w.css; on = true; render();
+      queue("color", w.hex ? { hex: w.hex } : { ct: w.ct });
+    }));
+    el.querySelector(".hm-rainbow input")?.addEventListener("input", (e) => { color = e.target.value; on = true; render(); queue("color", { hex: e.target.value }); });
+    el.querySelector(".hm-power")?.addEventListener("click", () => { on = !on; it.on = on; render(); queue("on", on); });
+  }
+  el.querySelector(".hm-pop-box").addEventListener("wheel", (e) => { e.preventDefault(); step(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+  homePanel.keys = (e) => {
+    if (["ArrowUp", "ArrowRight"].includes(e.key)) { e.preventDefault(); step(1); }
+    if (["ArrowDown", "ArrowLeft"].includes(e.key)) { e.preventDefault(); step(-1); }
+  };
+  el.addEventListener("pointerdown", (e) => { if (e.target === el) closeHomePanel(); }); // 點外面＝關掉
+  render();
+  requestAnimationFrame(() => el.classList.add("show"));
+}
+document.addEventListener("keydown", (e) => {
+  if (!homePanel) return;
+  if (e.key === "Escape") closeHomePanel(); else homePanel.keys?.(e);
+});
 
 WIDGETS.home = {
   // 方塊是 <button>，拖曳那段程式不會處理按鈕上的點擊，所以這裡自己聽 click
-  // 點一下：開／關（場景是套用）；長按（0.45 秒）不放、左右拖：調亮度（只有房間和燈）
+  // 點一下：開／關（場景是套用）
+  // 調整（燈＝亮度、冷氣＝溫度、電扇＝風速）：長按 0.45 秒後左右或上下拖；或直接在方塊上滾滑鼠滾輪
   mount(pane, inst) {
-    let press = null;
+    let press = null, wheel = null;
     pane.addEventListener("click", (e) => {
       const t = e.target.closest("[data-hid]");
       if (t?.dataset.skipClick) { delete t.dataset.skipClick; return; } // 剛剛是長按，不要再切換開關
       WIDGETS.home.tap(pane, inst, e.target);
     });
+    const begin = (t) => {
+      const it = store.home?.items?.find((x) => x.id === t.dataset.hid);
+      const spec = it && HOME_ADJUST[it.kind];
+      if (!spec) return null;
+      homeAdjusting = true;
+      t.classList.add("adjust");
+      const v = spec.get(it);
+      WIDGETS.home.showValue(t, spec, v);
+      return { t, it, spec, start: v, cur: v };
+    };
+    const finish = (p) => {
+      p.t.dataset.skipClick = "1";
+      setTimeout(() => delete p.t.dataset.skipClick, 400);
+      p.spec.apply(p.it, p.cur);
+      api.homeAdjust(p.it.id, p.spec.send(p.cur)).finally(() => setTimeout(() => { homeAdjusting = false; p.t.classList.remove("adjust"); loadHome(true); }, 500));
+    };
     pane.addEventListener("pointerdown", (e) => {
       const t = e.target.closest("[data-hid]");
-      if (!t || e.button !== 0 || !/^[gl]\d/.test(t.dataset.hid)) return;
-      const it = store.home?.items?.find((x) => x.id === t.dataset.hid);
-      press = { t, x: e.clientX, id: e.pointerId, bri: it?.on ? it.bri ?? 100 : 0, adjusting: false };
+      if (!t || e.button !== 0) return;
+      press = { t, x: e.clientX, y: e.clientY, id: e.pointerId, adj: null };
       press.timer = setTimeout(() => {
         if (!press) return;
-        press.adjusting = homeAdjusting = true;
-        press.guard = setTimeout(end, 10000); // 保險：萬一放開的那一下沒收到，10 秒後自動結束
-        t.setPointerCapture?.(press.id);
-        t.classList.add("adjust");
-        WIDGETS.home.showBri(t, press.bri);
+        // 長按：跟 iPhone「家庭」一樣跳出控制面板（燈＝亮度條、冷氣＝溫度和模式、電扇＝風速）
+        const it = store.home?.items?.find((x) => x.id === t.dataset.hid);
+        press = null;
+        if (!it || !HOME_ADJUST[it.kind]) return;
+        t.dataset.skipClick = "1";
+        setTimeout(() => delete t.dataset.skipClick, 600);
+        openHomePanel(it);
       }, 450);
     });
     pane.addEventListener("pointermove", (e) => {
-      if (!press?.adjusting) return;
-      const w = press.t.getBoundingClientRect().width || 150;
-      press.cur = Math.round(Math.min(100, Math.max(1, press.bri + ((e.clientX - press.x) / w) * 100)));
-      WIDGETS.home.showBri(press.t, press.cur);
+      const a = press?.adj;
+      if (!a) return;
+      // 左右或上下都可以：看哪個方向拖得多（往右、往上＝增加）
+      const r = a.t.getBoundingClientRect();
+      const dx = (e.clientX - press.x) / (r.width || 120), dy = (press.y - e.clientY) / (r.height || 80);
+      const d = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
+      a.cur = a.spec.clamp(a.start + d * (a.spec.max - a.spec.min));
+      WIDGETS.home.showValue(a.t, a.spec, a.cur);
     });
     const end = () => {
       if (!press) return;
@@ -800,29 +970,39 @@ WIDGETS.home = {
       clearTimeout(press.guard);
       const p = press;
       press = null;
-      if (!p.adjusting) return;
-      p.t.dataset.skipClick = "1";
-      setTimeout(() => delete p.t.dataset.skipClick, 400);
-      const bri = p.cur ?? p.bri;
-      const it = store.home?.items?.find((x) => x.id === p.t.dataset.hid);
-      if (it) { it.on = bri > 0; it.bri = bri; }
-      api.homeBri(p.t.dataset.hid, bri).finally(() => setTimeout(() => { homeAdjusting = false; p.t.classList.remove("adjust"); loadHome(true); }, 500));
+      if (p.adj) finish(p.adj);
     };
     pane.addEventListener("pointerup", end);
     pane.addEventListener("pointercancel", end);
+    // 滑鼠滾輪：往上增加、往下減少；停下來 0.6 秒才送出
+    pane.addEventListener("wheel", (e) => {
+      const t = e.target.closest("[data-hid]");
+      if (!t || press) return;
+      e.preventDefault();
+      if (!wheel || wheel.t !== t) {
+        if (wheel) { clearTimeout(wheel.timer); finish(wheel); }
+        wheel = begin(t);
+        if (!wheel) return;
+      }
+      wheel.cur = wheel.spec.clamp(wheel.cur + (e.deltaY < 0 ? 1 : -1) * wheel.spec.step);
+      WIDGETS.home.showValue(t, wheel.spec, wheel.cur);
+      clearTimeout(wheel.timer);
+      wheel.timer = setTimeout(() => { const w = wheel; wheel = null; finish(w); }, 600);
+    }, { passive: false });
     setTimeout(() => loadHome(true), 0); // 等小組件登記好再讀（不然第一次會被略過，要等 10 秒）
   },
-  showBri(t, bri) {
-    t.style.setProperty("--bri", bri + "%");
-    t.classList.toggle("on", bri > 0);
-    t.dataset.on = bri > 0 ? "1" : "0";
+  showValue(t, spec, v) {
+    const pane = t.closest(".pane");
+    if (pane) pane.__html = null; // 直接改了方塊，下次一定要重畫（不然會卡在「100%」）
+    t.style.setProperty("--bri", Math.round(((v - spec.min) / (spec.max - spec.min)) * 100) + "%");
     const st = t.querySelector("small");
-    if (st) st.textContent = `${bri}%`;
+    if (st) st.textContent = spec.label(v);
   },
   tap(pane, inst, target) {
     if (target.closest("[data-setup]")) return api.mgrOpen("home");
     const t = target.closest("[data-hid]");
     if (!t) return;
+    pane.__html = null;
     if (/^[svz]/.test(t.dataset.hid) || t.dataset.hid === "off") {
       // 場景：套用，閃一下「已套用」
       t.classList.add("on");
@@ -830,8 +1010,8 @@ WIDGETS.home = {
       const sub = st?.textContent;
       if (st) st.textContent = "套用中…";
       api.homeSet(t.dataset.hid, true).then((r) => {
-        if (st) st.textContent = r?.error ? "失敗" : "已套用";
-        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, 1500);
+        if (st) st.textContent = r?.error ? `失敗：${r.error}` : "已套用";
+        setTimeout(() => { t.classList.remove("on"); if (st) st.textContent = sub; loadHome(true); }, r?.error ? 4000 : 1500);
       });
       return;
     }
@@ -849,7 +1029,7 @@ WIDGETS.home = {
     const d = store.home;
     if (!d) { setHTML(pane, `<div class="setup-msg"><small>讀取中…</small></div>`); setTimeout(() => loadHome(true), 0); return; }
     if (d.needSetup) {
-      setHTML(pane, `<button class="setup-msg" data-setup><span class="hm-ico big">${icon("home")}</span><p>連接 Philips Hue</p><small>${esc(d.error || "點這裡設定")}</small></button>`);
+      setHTML(pane, `<button class="setup-msg" data-setup><span class="hm-ico big">${icon("home")}</span><p>連接 Hue 或 Matter 設備</p><small>${esc(d.error || "點這裡設定")}</small></button>`);
       return;
     }
     if (d.error && !d.items) {
@@ -859,7 +1039,7 @@ WIDGETS.home = {
     const list = homeItems(d).slice(0, HOME_TILES[inst.size] || 4);
     if (!list.length) { setHTML(pane, `<button class="setup-msg" data-setup><small>沒有要顯示的燈，點這裡選</small></button>`); return; }
     setHTML(pane, `<div class="hm hm-${inst.size}">${list.map((it) => `<button class="hm-tile ${it.kind} ${it.on ? "on" : ""} ${it.reachable === false ? "dead" : ""}" data-hid="${esc(it.id)}" data-on="${it.on ? 1 : 0}" title="${esc(homeTop(it) ? homeTop(it) + " " : "")}${esc(homeName(it))}">
-      <span class="hm-ico">${homeIcon(it)}</span>
+      <span class="hm-ico">${it.kind === "ac" && it.setpoint != null ? `<span class="hm-temp">${Number(it.setpoint).toFixed(1)}°</span>` : homeIcon(it)}</span>
       <span class="hm-text"><small>${esc(homeTop(it))}</small><b>${esc(homeName(it))}</b></span></button>`).join("")}</div>`);
   },
 };
