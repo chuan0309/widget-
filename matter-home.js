@@ -111,7 +111,7 @@ function createMatterHome({ storageDir, log = () => {} }) {
     } catch {}
     // matter.js 自己取的名字（MA-roomairconditioner、endpoint1…）不好看，改用設備名稱或種類
     if (ep.name && !/^(endpoint|MA-)/i.test(ep.name)) return ep.name;
-    return n.basicInformation?.nodeLabel || null;
+    return null;
   }
   const KIND_NAMES = { ac: "冷氣", fan: "電扇", switch: "開關" };
 
@@ -124,11 +124,14 @@ function createMatterHome({ storageDir, log = () => {} }) {
       let n;
       try { n = await node(id); }
       catch (e) { items.push({ id: `m${id}`, kind: "switch", name: "Matter 設備", room: "沒有回應", on: false, reachable: false }); continue; }
-      for (const ep of all(n)) {
+      const eps = all(n).filter((ep) => cl(ep, Thermostat) || cl(ep, FanControl) || cl(ep, OnOff));
+      // 設備名稱（例如「AC」）只在這個設備只有一個功能時用，不然冷氣和電扇會叫同一個名字
+      const nodeLabel = eps.length === 1 ? n.basicInformation?.nodeLabel || null : null;
+      for (const ep of eps) {
         const t = cl(ep, Thermostat), f = cl(ep, FanControl), o = cl(ep, OnOff);
         if (!t && !f && !o) continue;
         const kind = t ? "ac" : f ? "fan" : "switch";
-        const base = { id: `m${id}-${ep.getNumber()}`, name: (await nameOf(ep, n)) || KIND_NAMES[kind], room: "", reachable: true };
+        const base = { id: `m${id}-${ep.getNumber()}`, name: (await nameOf(ep, n)) || nodeLabel || KIND_NAMES[kind], room: "", reachable: true };
         try {
           if (t) {
             const mode = await t.getSystemModeAttribute();

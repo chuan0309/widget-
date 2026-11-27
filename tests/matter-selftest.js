@@ -37,7 +37,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const a = items.find((i) => i.kind === "ac"), f = items.find((i) => i.kind === "fan");
   if (!a || !f) fail("ac/fan not found");
   if (a.setpoint !== 22) fail("setpoint " + a.setpoint);
-  if (/^MA-/.test(a.name) || /^MA-/.test(f.name)) fail("internal names leaked: " + a.name + " / " + f.name);
+  if (/^MA-/.test(a.name) || /^MA-/.test(f.name) || a.name === f.name) fail("bad names: " + a.name + " / " + f.name);
 
   await home.set(a.id, { on: false }); await sleep(500);
   if (ac.state.onOff.onOff !== false) fail("ac off");
