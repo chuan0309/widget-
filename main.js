@@ -678,7 +678,7 @@ function managerState() {
     weatherSource: settings.weatherSource || "openmeteo",
     cwaHasKey: cwa.hasKey(),
     locate: locateInfo,
-    version: app.getVersion(),
+    version: showVersion(app.getVersion()),
     isWin11: IS_WIN11,
     dataFolder: app.getPath("userData"),
   };
@@ -790,6 +790,8 @@ ipcMain.on("mgr:pins-changed", () => sendToKind("pinterest", "pins:changed"));
 
 /* ───────── 自動更新（從 GitHub Releases 下載新版）───────── */
 // 有新版時在背景下載，下載好之後：關掉程式時自動裝好；也可以在管理程式按「立即更新」。
+// 畫面上的版本號：1.3.0 → 1.03（自動更新規定要 x.y.z，所以內部還是 1.3.0）；舊的 1.0.101 照原樣
+const showVersion = (v) => { const m = /^1\.(\d+)\.0$/.exec(String(v || "")); return m && m[1] !== "0" ? `1.${m[1].padStart(2, "0")}` : String(v || ""); };
 let update = { state: "idle", version: "", progress: 0, error: "" };
 function setUpdate(patch) {
   update = { ...update, ...patch };
@@ -800,11 +802,11 @@ function setupUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on("checking-for-update", () => setUpdate({ state: "checking", error: "" }));
-  autoUpdater.on("update-available", (i) => setUpdate({ state: "downloading", version: i.version, progress: 0 }));
+  autoUpdater.on("update-available", (i) => setUpdate({ state: "downloading", version: showVersion(i.version), progress: 0 }));
   autoUpdater.on("update-not-available", () => setUpdate({ state: "latest" }));
   autoUpdater.on("download-progress", (p) => setUpdate({ state: "downloading", progress: Math.round(p.percent) }));
   autoUpdater.on("update-downloaded", (i) => {
-    setUpdate({ state: "ready", version: i.version });
+    setUpdate({ state: "ready", version: showVersion(i.version) });
     tray?.setToolTip(`Glass Widgets（新版 ${i.version} 已下載，重新開啟後就會更新）`);
   });
   autoUpdater.on("error", (e) => setUpdate({ state: "error", error: String(e?.message || e).split("\n")[0].slice(0, 200) }));
@@ -812,7 +814,7 @@ function setupUpdater() {
   setTimeout(check, 30 * 1000);          // 開機 30 秒後檢查一次
   setInterval(check, 6 * 60 * 60 * 1000); // 之後每 6 小時
 }
-ipcMain.handle("update:get", () => ({ ...update, current: app.getVersion(), packaged: app.isPackaged }));
+ipcMain.handle("update:get", () => ({ ...update, current: showVersion(app.getVersion()), packaged: app.isPackaged }));
 ipcMain.on("update:check", () => app.isPackaged && autoUpdater.checkForUpdates().catch(() => {}));
 ipcMain.on("update:install", () => { if (update.state === "ready") { app.isQuitting = true; autoUpdater.quitAndInstall(true, true); } });
 
